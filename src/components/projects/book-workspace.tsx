@@ -145,7 +145,7 @@ export function BookWorkspace({
     const response = await fetch("/api/export/pdf", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ project })
+      body: JSON.stringify({ project: latestProjectRef.current })
     });
 
     if (!response.ok) {
@@ -172,6 +172,17 @@ export function BookWorkspace({
     };
   }
 
+  function triggerBlobDownload(blob: Blob, fileName: string) {
+    const href = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = href;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(href), 1500);
+  }
+
   async function previewPdf() {
     try {
       startTask("preview-pdf");
@@ -191,19 +202,41 @@ export function BookWorkspace({
     try {
       startTask("download-pdf");
       const { blob, meta } = await requestPdf();
-      const href = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = href;
-      anchor.download = `${slugify(project.title)}-${project.id.slice(0, 8)}-kdp-interior.pdf`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(href);
+      triggerBlobDownload(
+        blob,
+        `${slugify(latestProjectRef.current.title)}-${latestProjectRef.current.id.slice(0, 8)}-kdp-interior.pdf`
+      );
       setPdfMeta(meta);
     } catch (error) {
       alert(error instanceof Error ? error.message : "Telechargement PDF impossible.");
     } finally {
       finishTask("download-pdf");
+    }
+  }
+
+  async function downloadDocx() {
+    try {
+      startTask("download-docx");
+      const response = await fetch("/api/export/docx", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project: latestProjectRef.current })
+      });
+
+      if (!response.ok) {
+        const data = (await response.json()) as { error?: string };
+        throw new Error(data.error ?? "DOCX impossible.");
+      }
+
+      const blob = await response.blob();
+      triggerBlobDownload(
+        blob,
+        `${slugify(latestProjectRef.current.title)}-${latestProjectRef.current.id.slice(0, 8)}.docx`
+      );
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Telechargement Word impossible.");
+    } finally {
+      finishTask("download-docx");
     }
   }
 
@@ -223,14 +256,10 @@ export function BookWorkspace({
       }
 
       const blob = await response.blob();
-      const href = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = href;
-      anchor.download = `${slugify(latestProjectRef.current.title)}-${latestProjectRef.current.id.slice(0, 8)}.zip`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(href);
+      triggerBlobDownload(
+        blob,
+        `${slugify(latestProjectRef.current.title)}-${latestProjectRef.current.id.slice(0, 8)}.zip`
+      );
     } finally {
       finishTask("export");
     }
@@ -564,6 +593,10 @@ export function BookWorkspace({
               <Button variant="secondary" onClick={() => void downloadPdf()} disabled={isBusy("download-pdf")}>
                 <FileText className="mr-2 h-4 w-4" />
                 {isBusy("download-pdf") ? "PDF..." : "Telecharger PDF KDP"}
+              </Button>
+              <Button variant="secondary" onClick={() => void downloadDocx()} disabled={isBusy("download-docx")}>
+                <FileText className="mr-2 h-4 w-4" />
+                {isBusy("download-docx") ? "Word..." : "Telecharger Word"}
               </Button>
               <Button onClick={() => void exportBundle()} disabled={isBusy("export")}>
                 <Download className="mr-2 h-4 w-4" />
