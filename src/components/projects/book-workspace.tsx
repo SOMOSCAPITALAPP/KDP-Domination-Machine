@@ -125,7 +125,7 @@ export function BookWorkspace({
     });
   }
 
-  function createApiProjectSnapshot(source: BookProject): BookProject {
+  function createGenerationProjectSnapshot(source: BookProject): BookProject {
     return {
       ...source,
       chapters: source.chapters.map((chapter) => ({
@@ -138,7 +138,7 @@ export function BookWorkspace({
   async function generate(kind: GenerationKind, chapterId?: string) {
     try {
       startTask(kind, chapterId);
-      const projectSnapshot = createApiProjectSnapshot(latestProjectRef.current);
+      const projectSnapshot = createGenerationProjectSnapshot(latestProjectRef.current);
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -186,7 +186,7 @@ export function BookWorkspace({
     const response = await fetch("/api/export/pdf", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ project: createApiProjectSnapshot(latestProjectRef.current) })
+      body: JSON.stringify({ project: latestProjectRef.current })
     });
 
     if (!response.ok) {
@@ -290,7 +290,7 @@ export function BookWorkspace({
       const response = await fetch("/api/export/docx", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project: createApiProjectSnapshot(latestProjectRef.current) })
+        body: JSON.stringify({ project: latestProjectRef.current })
       });
 
       if (!response.ok) {
@@ -316,7 +316,7 @@ export function BookWorkspace({
       const response = await fetch("/api/export", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project: createApiProjectSnapshot(latestProjectRef.current) })
+        body: JSON.stringify({ project: latestProjectRef.current })
       });
 
       if (!response.ok) {

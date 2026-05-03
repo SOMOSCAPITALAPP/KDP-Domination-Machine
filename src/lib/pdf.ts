@@ -1,12 +1,12 @@
 import { PDFDocument, PDFFont, StandardFonts, rgb } from "pdf-lib";
+import { BOOK_LAYOUT, computeBookLayoutPlan } from "@/lib/book-layout";
 import { buildCleanManuscript, parseImageDataUrl } from "@/lib/manuscript";
 import type { BookProject } from "@/lib/types";
-import { getKdpMarginPreset, getPdfPreviewMeta, getTrimSizeDimensions } from "@/lib/utils";
+import { getTrimSizeDimensions } from "@/lib/utils";
 
 const POINTS_PER_INCH = 72;
-const BODY_FONT_SIZE = 12.5;
-const BODY_LINE_HEIGHT = 21;
-const PARAGRAPH_GAP = 12;
+const BLACK = rgb(0, 0, 0);
+const FOOTER_COLOR = rgb(0.2, 0.2, 0.2);
 const PDF_CHAR_REPLACEMENTS: Record<string, string> = {
   "\u00A0": " ",
   "\u2007": " ",
@@ -119,24 +119,75 @@ function sanitizeForPdfText(text: string, font: PDFFont) {
   return output;
 }
 
+function drawJustifiedLine(
+  page: ReturnType<PDFDocument["addPage"]>,
+  font: PDFFont,
+  line: string,
+  x: number,
+  y: number,
+  size: number,
+  maxWidth: number,
+  justify: boolean
+) {
+  const safeLine = sanitizeForPdfText(line, font);
+
+  if (!justify || !safeLine.includes(" ")) {
+    page.drawText(safeLine, {
+      x,
+      y,
+      font,
+      size,
+      color: BLACK
+    });
+    return;
+  }
+
+  const parts = safeLine.split(" ");
+  const wordWidth = parts.reduce((sum, part) => sum + font.widthOfTextAtSize(part, size), 0);
+  const spaceCount = parts.length - 1;
+
+  if (spaceCount <= 0) {
+    page.drawText(safeLine, { x, y, font, size, color: BLACK });
+    return;
+  }
+
+  const extraSpace = Math.max(0, maxWidth - wordWidth);
+  const wordSpacing = extraSpace / spaceCount;
+
+  let cursorX = x;
+  parts.forEach((part, index) => {
+    page.drawText(part, {
+      x: cursorX,
+      y,
+      font,
+      size,
+      color: BLACK
+    });
+
+    cursorX += font.widthOfTextAtSize(part, size);
+    if (index < parts.length - 1) {
+      cursorX += wordSpacing;
+    }
+  });
+}
+
 export async function buildProjectPdf(project: BookProject) {
   const pdfDoc = await PDFDocument.create();
-  const titleFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const titleFont = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
   const bodyFont = await pdfDoc.embedFont(StandardFonts.TimesRoman);
   const italicFont = await pdfDoc.embedFont(StandardFonts.TimesRomanItalic);
   const { widthIn, heightIn } = getTrimSizeDimensions(
     project.paperback.trimSize,
     project.paperback.bleed
   );
+  const layout = await computeBookLayoutPlan(project);
   const manuscript = buildCleanManuscript(project);
-  const meta = getPdfPreviewMeta(project);
-  const margins = getKdpMarginPreset(meta.pageCount, project.paperback.bleed);
   const pageWidth = toPoints(widthIn);
   const pageHeight = toPoints(heightIn);
-  const topMargin = toPoints(margins.topMarginIn);
-  const bottomMargin = toPoints(margins.bottomMarginIn);
-  const insideMargin = toPoints(margins.insideMarginIn);
-  const outsideMargin = toPoints(margins.outsideMarginIn);
+  const topMargin = toPoints(layout.topMarginIn);
+  const bottomMargin = toPoints(layout.bottomMarginIn);
+  const insideMargin = toPoints(layout.insideMarginIn);
+  const outsideMargin = toPoints(layout.outsideMarginIn);
 
   let pageNumber = 0;
   let page = addPage();
@@ -162,37 +213,13 @@ export async function buildProjectPdf(project: BookProject) {
     cursorY = pageHeight - topMargin;
   }
 
-  function writeLines(
-    lines: string[],
-    font: typeof bodyFont,
-    size: number,
-    lineHeight: number,
-    color = rgb(0.12, 0.16, 0.22)
-  ) {
-    const { left, right } = getPageMargins(pageNumber);
-    const maxWidth = pageWidth - left - right;
-
-    for (const line of lines) {
-      const safeLine = sanitizeForPdfText(line, font);
-      ensureSpace(lineHeight);
-      page.drawText(safeLine, {
-        x: left,
-        y: cursorY,
-        font,
-        size,
-        color,
-        maxWidth
-      });
-      cursorY -= lineHeight;
-    }
-  }
-
   function writeParagraph(
     text: string,
-    font: typeof bodyFont,
+    font: PDFFont,
     size: number,
     lineHeight: number,
-    gapAfter = PARAGRAPH_GAP
+    gapAfter: number,
+    justify = true
   ) {
     const { left, right } = getPageMargins(pageNumber);
     const maxWidth = pageWidth - left - right;
@@ -200,16 +227,31 @@ export async function buildProjectPdf(project: BookProject) {
     const lines = wrapText(safeText, maxWidth, size, (value, currentSize) =>
       font.widthOfTextAtSize(value, currentSize)
     );
-    writeLines(lines, font, size, lineHeight);
+
+    lines.forEach((line, index) => {
+      ensureSpace(lineHeight);
+      drawJustifiedLine(
+        page,
+        font,
+        line,
+        left,
+        cursorY,
+        size,
+        maxWidth,
+        justify && index < lines.length - 1
+      );
+      cursorY -= lineHeight;
+    });
+
     cursorY -= gapAfter;
   }
 
-  function writeHeading(text: string, size: number, gapAfter = 12) {
-    cursorY -= 8;
-    writeParagraph(text, titleFont, size, size + 5, gapAfter);
+  function writeHeading(text: string, size: number, gapAfter = 8) {
+    cursorY -= 4;
+    writeParagraph(text, titleFont, size, size + 3, gapAfter, false);
   }
 
-  function writeCenteredText(text: string, font: typeof bodyFont, size: number, y: number) {
+  function writeCenteredText(text: string, font: PDFFont, size: number, y: number) {
     const safeText = sanitizeForPdfText(text, font);
     const width = font.widthOfTextAtSize(safeText, size);
     page.drawText(safeText, {
@@ -217,7 +259,7 @@ export async function buildProjectPdf(project: BookProject) {
       y,
       font,
       size,
-      color: rgb(0.12, 0.16, 0.22)
+      color: BLACK
     });
   }
 
@@ -232,16 +274,16 @@ export async function buildProjectPdf(project: BookProject) {
 
     const { left, right } = getPageMargins(pageNumber);
     const maxWidth = pageWidth - left - right;
-    const scaled = image.scaleToFit(maxWidth, toPoints(3.6));
+    const scaled = image.scaleToFit(maxWidth, BOOK_LAYOUT.imageHeight);
 
-    ensureSpace(scaled.height + 28);
+    ensureSpace(scaled.height + 18);
     page.drawImage(image, {
       x: left + (maxWidth - scaled.width) / 2,
       y: cursorY - scaled.height,
       width: scaled.width,
       height: scaled.height
     });
-    cursorY -= scaled.height + 18;
+    cursorY -= scaled.height + 14;
   }
 
   function drawFooter() {
@@ -250,10 +292,10 @@ export async function buildProjectPdf(project: BookProject) {
     const textWidth = bodyFont.widthOfTextAtSize(label, 10);
     page.drawText(label, {
       x: (pageWidth - textWidth) / 2,
-      y: toPoints(0.4),
+      y: toPoints(0.42),
       font: bodyFont,
       size: 10,
-      color: rgb(0.38, 0.41, 0.47)
+      color: FOOTER_COLOR
     });
   }
 
@@ -263,103 +305,246 @@ export async function buildProjectPdf(project: BookProject) {
     cursorY = pageHeight - topMargin;
   }
 
-  writeCenteredText(project.title, titleFont, 24, pageHeight - toPoints(2.1));
+  function writeTocLine(title: string, pageRef: number) {
+    const { left, right } = getPageMargins(pageNumber);
+    const maxWidth = pageWidth - left - right;
+    const pageLabel = String(pageRef);
+    const pageWidthValue = bodyFont.widthOfTextAtSize(pageLabel, BOOK_LAYOUT.tocFontSize);
+    const availableTitleWidth = maxWidth - pageWidthValue - 24;
+    const titleLines = wrapText(title, availableTitleWidth, BOOK_LAYOUT.tocFontSize, (value, size) =>
+      bodyFont.widthOfTextAtSize(value, size)
+    );
+
+    titleLines.forEach((line, index) => {
+      ensureSpace(BOOK_LAYOUT.tocLineHeight);
+
+      if (index < titleLines.length - 1) {
+        page.drawText(sanitizeForPdfText(line, bodyFont), {
+          x: left,
+          y: cursorY,
+          font: bodyFont,
+          size: BOOK_LAYOUT.tocFontSize,
+          color: BLACK
+        });
+        cursorY -= BOOK_LAYOUT.tocLineHeight;
+        return;
+      }
+
+      const safeLine = sanitizeForPdfText(line, bodyFont);
+      const lineWidth = bodyFont.widthOfTextAtSize(safeLine, BOOK_LAYOUT.tocFontSize);
+      const dotsWidth = Math.max(18, maxWidth - lineWidth - pageWidthValue - 12);
+      const dotChar = ".";
+      const dotWidth = bodyFont.widthOfTextAtSize(dotChar, BOOK_LAYOUT.tocFontSize);
+      const dotCount = Math.max(3, Math.floor(dotsWidth / Math.max(dotWidth, 1)));
+      const dots = dotChar.repeat(dotCount);
+      const dotsX = left + lineWidth + 6;
+
+      page.drawText(safeLine, {
+        x: left,
+        y: cursorY,
+        font: bodyFont,
+        size: BOOK_LAYOUT.tocFontSize,
+        color: BLACK
+      });
+      page.drawText(dots, {
+        x: dotsX,
+        y: cursorY,
+        font: bodyFont,
+        size: BOOK_LAYOUT.tocFontSize,
+        color: BLACK
+      });
+      page.drawText(pageLabel, {
+        x: left + maxWidth - pageWidthValue,
+        y: cursorY,
+        font: bodyFont,
+        size: BOOK_LAYOUT.tocFontSize,
+        color: BLACK
+      });
+      cursorY -= BOOK_LAYOUT.tocLineHeight;
+    });
+
+    cursorY -= BOOK_LAYOUT.tocGap;
+  }
+
+  writeCenteredText(project.title, titleFont, BOOK_LAYOUT.titleSize, pageHeight - toPoints(2.15));
   if (project.packaging.seoSubtitle || project.promise) {
     writeCenteredText(
       project.packaging.seoSubtitle || project.promise,
       italicFont,
-      14,
-      pageHeight - toPoints(2.7)
+      BOOK_LAYOUT.subtitleSize,
+      pageHeight - toPoints(2.8)
     );
   }
   if (project.frontMatter.authorName) {
-    writeCenteredText(project.frontMatter.authorName, bodyFont, 13, pageHeight - toPoints(3.35));
+    writeCenteredText(
+      project.frontMatter.authorName,
+      bodyFont,
+      12,
+      pageHeight - toPoints(3.35)
+    );
   }
   drawFooter();
   nextPage();
 
-  writeHeading("Informations editoriales", 16);
+  writeHeading("Informations editoriales", 15, 6);
   if (project.frontMatter.publisherName) {
-    writeParagraph(`Maison d'edition: ${project.frontMatter.publisherName}`, bodyFont, 11.5, 18, 8);
+    writeParagraph(
+      `Maison d'edition: ${project.frontMatter.publisherName}`,
+      bodyFont,
+      BOOK_LAYOUT.infoFontSize,
+      BOOK_LAYOUT.infoLineHeight,
+      4,
+      false
+    );
   }
   if (project.frontMatter.collectionName) {
-    writeParagraph(`Collection: ${project.frontMatter.collectionName}`, bodyFont, 11.5, 18, 8);
+    writeParagraph(
+      `Collection: ${project.frontMatter.collectionName}`,
+      bodyFont,
+      BOOK_LAYOUT.infoFontSize,
+      BOOK_LAYOUT.infoLineHeight,
+      4,
+      false
+    );
   }
   if (project.frontMatter.isbn) {
-    writeParagraph(`ISBN: ${project.frontMatter.isbn}`, bodyFont, 11.5, 18, 8);
+    writeParagraph(
+      `ISBN: ${project.frontMatter.isbn}`,
+      bodyFont,
+      BOOK_LAYOUT.infoFontSize,
+      BOOK_LAYOUT.infoLineHeight,
+      4,
+      false
+    );
   }
   if (project.frontMatter.editionNote) {
-    writeParagraph(project.frontMatter.editionNote, bodyFont, 11.5, 18, 8);
+    writeParagraph(
+      project.frontMatter.editionNote,
+      bodyFont,
+      BOOK_LAYOUT.infoFontSize,
+      BOOK_LAYOUT.infoLineHeight,
+      4
+    );
   }
   if (project.frontMatter.copyrightNotice) {
-    writeParagraph(project.frontMatter.copyrightNotice, bodyFont, 11.5, 18, 8);
+    writeParagraph(
+      project.frontMatter.copyrightNotice,
+      bodyFont,
+      BOOK_LAYOUT.infoFontSize,
+      BOOK_LAYOUT.infoLineHeight,
+      4
+    );
   }
 
   if (project.frontMatter.dedication) {
     nextPage();
-    writeHeading("Dedicace", 16);
-    writeParagraph(project.frontMatter.dedication, italicFont, 12.5, 20, 14);
+    writeHeading("Dedicace", 16, 8);
+    splitParagraphs(project.frontMatter.dedication).forEach((paragraph) => {
+      writeParagraph(
+        paragraph,
+        italicFont,
+        BOOK_LAYOUT.bodyFontSize,
+        BOOK_LAYOUT.bodyLineHeight,
+        BOOK_LAYOUT.paragraphGap
+      );
+    });
   }
 
   if (project.frontMatter.preface) {
     nextPage();
-    writeHeading("Preface", 18);
-    for (const paragraph of splitParagraphs(project.frontMatter.preface)) {
-      writeParagraph(paragraph, bodyFont, BODY_FONT_SIZE, BODY_LINE_HEIGHT, PARAGRAPH_GAP);
-    }
+    writeHeading("Preface", 17, 8);
+    splitParagraphs(project.frontMatter.preface).forEach((paragraph) => {
+      writeParagraph(
+        paragraph,
+        bodyFont,
+        BOOK_LAYOUT.bodyFontSize,
+        BOOK_LAYOUT.bodyLineHeight,
+        BOOK_LAYOUT.paragraphGap
+      );
+    });
   }
 
   if (project.frontMatter.introduction) {
     nextPage();
-    writeHeading("Introduction", 18);
-    for (const paragraph of splitParagraphs(project.frontMatter.introduction)) {
-      writeParagraph(paragraph, bodyFont, BODY_FONT_SIZE, BODY_LINE_HEIGHT, PARAGRAPH_GAP);
-    }
+    writeHeading("Introduction", 17, 8);
+    splitParagraphs(project.frontMatter.introduction).forEach((paragraph) => {
+      writeParagraph(
+        paragraph,
+        bodyFont,
+        BOOK_LAYOUT.bodyFontSize,
+        BOOK_LAYOUT.bodyLineHeight,
+        BOOK_LAYOUT.paragraphGap
+      );
+    });
   }
 
   nextPage();
-  writeHeading("Table des matieres", 18);
-  const tocLines = project.tableOfContents
-    ? project.tableOfContents.split("\n").map((item) => item.trim()).filter(Boolean)
-    : project.chapters.map((chapter) => chapter.title);
-  for (const line of tocLines) {
-    writeParagraph(line, bodyFont, 12.5, 18, 6);
-  }
+  writeHeading("Table des matieres", 17, 6);
+  layout.tocEntries.forEach((entry) => writeTocLine(entry.title, entry.page));
 
   for (const entry of manuscript) {
     nextPage();
-    writeHeading(entry.chapter.title, 20, 16);
+    writeHeading(entry.chapter.title, BOOK_LAYOUT.chapterTitleSize, 10);
 
     if (entry.chapter.selectedIllustrationDataUrl) {
       await drawChapterImage(entry.chapter.selectedIllustrationDataUrl);
     }
 
     if (entry.blocks.length === 0) {
-      writeParagraph("Chapitre a completer.", italicFont, 12, 18, 12);
+      writeParagraph(
+        "Chapitre a completer.",
+        italicFont,
+        BOOK_LAYOUT.bodyFontSize,
+        BOOK_LAYOUT.bodyLineHeight,
+        BOOK_LAYOUT.paragraphGap
+      );
       continue;
     }
 
     for (const block of entry.blocks) {
       if (block.type === "heading") {
-        writeHeading(block.text, 15, 8);
+        writeHeading(block.text, BOOK_LAYOUT.sectionTitleSize, 5);
         continue;
       }
 
       if (block.type === "list") {
-        for (const item of block.items) {
-          writeParagraph(`- ${item}`, bodyFont, BODY_FONT_SIZE, BODY_LINE_HEIGHT, 6);
-        }
-        cursorY -= 4;
+        block.items.forEach((item) => {
+          writeParagraph(
+            `- ${item}`,
+            bodyFont,
+            BOOK_LAYOUT.bodyFontSize,
+            BOOK_LAYOUT.bodyLineHeight,
+            4
+          );
+        });
+        cursorY -= 2;
         continue;
       }
 
-      writeParagraph(block.text, bodyFont, BODY_FONT_SIZE, BODY_LINE_HEIGHT, PARAGRAPH_GAP);
+      writeParagraph(
+        block.text,
+        bodyFont,
+        BOOK_LAYOUT.bodyFontSize,
+        BOOK_LAYOUT.bodyLineHeight,
+        BOOK_LAYOUT.paragraphGap
+      );
     }
   }
 
   drawFooter();
+
   return {
     bytes: await pdfDoc.save(),
-    meta
+    meta: {
+      pageCount: layout.pageCount,
+      trimSize: layout.trimSize,
+      bleed: layout.bleed,
+      insideMarginIn: layout.insideMarginIn,
+      outsideMarginIn: layout.outsideMarginIn,
+      topMarginIn: layout.topMarginIn,
+      bottomMarginIn: layout.bottomMarginIn,
+      estimatedWords: layout.estimatedWords,
+      model: "gpt-4.1-mini"
+    }
   };
 }

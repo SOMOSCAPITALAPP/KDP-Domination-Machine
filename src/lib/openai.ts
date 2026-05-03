@@ -150,10 +150,10 @@ function buildPrompt(request: GenerationRequest) {
 }
 
 function getMaxCompletionTokens(kind: GenerationKind) {
-  if (kind === "chapter" || kind === "develop" || kind === "examples") return 16000;
+  if (kind === "chapter" || kind === "develop" || kind === "examples") return 22000;
   if (kind === "simplify" || kind === "rewriteHuman") return 14000;
   if (kind === "outline") return 8000;
-  if (kind === "frontMatter") return 4500;
+  if (kind === "frontMatter") return 8000;
   if (kind === "concept" || kind === "packaging") return 5000;
   return 3000;
 }
@@ -504,10 +504,21 @@ function buildFrontMatterFallback(project: BookProject): GeneratedPayload {
       dedication: project.frontMatter.dedication || "",
       preface:
         project.frontMatter.preface ||
-        `Ce livre a ete concu pour guider ${project.audience || "le lecteur"} avec clarte, serieux et application immediate.`,
+        [
+          `Ce livre est ne d'un constat simple: ${project.audience || "le lecteur"} cherche rarement plus d'information brute, mais plutot un chemin fiable, progressif et rassurant pour avancer avec discernement dans ${project.niche || "ce sujet"}.`,
+          `L'ambition de ces pages est donc de proposer un cadre solide, lisible et vraiment utile, avec un ton ${project.tone || "pedagogique"} qui privilegie la clarte, la nuance et l'application concrete.`,
+          `Au fil du livre, chaque chapitre a ete pense pour apporter une pierre supplementaire a l'edifice: mieux comprendre, mieux choisir, mieux agir et, surtout, mieux integrer ce qui compte vraiment dans la vie du lecteur.`,
+          `Si ce manuscrit peut tenir sa promesse, ce sera parce qu'il ne cherche ni l'effet de mode ni la formule vide, mais une progression serieuse, humaine et directement exploitable.`
+        ].join("\n\n"),
       introduction:
         project.frontMatter.introduction ||
-        `Dans ce livre, nous allons transformer ${project.promise || "une promesse centrale"} en progression concrete grace a un parcours clair, etape par etape.`
+        [
+          `Bienvenue dans un livre pense pour transformer ${project.promise || "une promesse centrale"} en progression concrete, lisible et durable.`,
+          `Tu n'entres pas ici dans un simple survol du sujet. Le parcours a ete structure pour poser les bases, approfondir les points essentiels, faire le tri entre l'accessoire et l'utile, puis guider vers une mise en pratique reelle.`,
+          `Le fil conducteur du livre repose sur une idee simple: une comprehension plus profonde produit de meilleures decisions, et de meilleures decisions changent la qualite des resultats dans la duree.`,
+          `C'est pourquoi chaque partie a ete construite pour faire avancer le lecteur avec regularite: comprendre le contexte, identifier les principes clefs, reconnaitre les nuances importantes, puis traduire ces elements en actions claires et pertinentes.`,
+          `En refermant ce livre, l'objectif est que le lecteur ne reparte pas seulement avec des informations, mais avec une vision plus ordonnee, une confiance plus stable et des reperes suffisamment solides pour agir avec plus de justesse.`
+        ].join("\n\n")
     }
   };
 }
@@ -519,33 +530,29 @@ function buildChapterFallback(project: BookProject, chapter?: Chapter, kind: Gen
       chapterContent: current.sourceContent
     };
   }
-  const targetWords = current?.targetWords || 2200;
-  const sectionCount = Math.max(6, Math.round(targetWords / 550));
+  const targetWords = current?.targetWords || 2600;
+  const sectionCount = Math.max(6, Math.round(targetWords / 650));
   const sections = Array.from({ length: sectionCount }, (_, index) => {
     const part = index + 1;
-    return [
-      `### Section ${part}`,
-      `Ce passage developpe un angle concret du chapitre ${current?.title || "en cours"} et fait avancer le lecteur vers la promesse du livre.`,
-      "Explique le principe, montre pourquoi il compte maintenant, puis illustre-le avec une situation credible, une nuance utile et une action precise.",
+    const emphasis =
       kind === "examples"
-        ? "Ajoute ici un exemple detaille, un cas pratique et une mini mise en situation pour ancrer l'idee en profondeur."
+        ? "Chaque developpement s'appuie sur un exemple concret, une situation plausible et une application immediate."
         : kind === "simplify"
-          ? "La formulation reste plus simple, plus directe et plus facile a appliquer, sans reduire la richesse du contenu."
+          ? "Le propos reste clair, fluide et accessible, tout en gardant une vraie densite de fond."
           : kind === "develop"
-            ? "La version va plus loin dans le raisonnement, les nuances, les transitions, les objections et les applications terrain."
-            : "La version reste dense, pedagogique, orientee execution et assez longue pour constituer un vrai chapitre."
+            ? "Le propos va plus loin, ajoute des nuances utiles, des transitions plus riches et davantage d'applications concretes."
+            : "Le propos reste dense, utile, progressif et suffisamment developpe pour constituer un vrai chapitre de livre.";
+
+    return [
+      `${part}. ${current?.title || "Chapitre"} - axe ${part}`,
+      `Dans cette partie, le lecteur approfondit un angle essentiel du chapitre ${current?.title || ""}. L'explication avance pas a pas, relie les idees entre elles et montre pourquoi ce point compte reellement dans la progression globale du livre.`,
+      `L'enjeu n'est pas seulement de comprendre une notion de plus, mais d'en tirer une lecture plus sure, une application plus juste et un meilleur discernement face aux situations concretes du terrain.`,
+      emphasis
     ].join("\n\n");
   }).join("\n\n");
 
   return {
-    chapterContent: [
-      current?.title || "Chapitre",
-      "",
-      sections,
-      "",
-      "Conclusion locale",
-      "Le lecteur repart avec une comprehension plus nette, une etape actionnable et une meilleure progression vers le resultat final."
-    ].join("\n")
+    chapterContent: sections
   };
 }
 
@@ -684,7 +691,7 @@ function needsChapterExpansion(project: BookProject, chapterId: string | undefin
   if (!chapterId || !payload.chapterContent) return false;
   const chapter = project.chapters.find((item) => item.id === chapterId);
   if (!chapter) return false;
-  return countWords(payload.chapterContent) < Math.max(2200, Math.round(chapter.targetWords * 0.95));
+  return countWords(payload.chapterContent) < Math.max(2200, chapter.targetWords);
 }
 
 function ensureChapterMinimumLength(
@@ -699,7 +706,7 @@ function ensureChapterMinimumLength(
   if (!chapter) return payload;
 
   const currentWords = countWords(payload.chapterContent);
-  const minimumWords = Math.max(2200, Math.round(chapter.targetWords * 0.95));
+  const minimumWords = Math.max(2200, chapter.targetWords);
   if (currentWords >= minimumWords) return payload;
 
   const fallback = buildChapterFallback(project, chapter, kind).chapterContent || "";
@@ -717,17 +724,63 @@ Objectif:
 - Resume: ${chapter.summary}
 - Objectif pedagogique: ${chapter.learningGoal}
 - Cible ideale: ${chapter.targetWords} mots
-- Minimum indispensable: ${Math.max(2200, Math.round(chapter.targetWords * 0.95))} mots
+- Minimum indispensable: ${Math.max(2200, chapter.targetWords)} mots
 
 Draft actuel:
 ${draft}
 
-Reprends ce chapitre et livre une version beaucoup plus complete, plus longue, plus utile, avec sous-sections, exemples, transitions et conclusion locale.
-La sortie doit rester du manuscrit pur.
+Reprends ce chapitre et livre une version beaucoup plus complete, plus longue, plus utile, avec de vraies sous-sections naturelles, des exemples, des transitions et des paragraphes consistants.
+Ne produis aucun commentaire, aucun libelle meta et aucune "conclusion locale".
+La sortie doit rester du manuscrit pur, pret a etre exporte dans un livre.
 
 Retourne UNIQUEMENT un JSON:
 {
   "chapterContent": "..."
+}`;
+}
+
+function needsFrontMatterExpansion(payload: GeneratedPayload) {
+  if (!payload.frontMatter) return false;
+  const prefaceWords = countWords(payload.frontMatter.preface || "");
+  const introductionWords = countWords(payload.frontMatter.introduction || "");
+  return prefaceWords < 500 || introductionWords < 800;
+}
+
+function frontMatterExpansionPrompt(project: BookProject, payload: GeneratedPayload) {
+  return `Les elements editoriaux suivants sont trop courts pour un paperback KDP premium.
+
+Projet:
+- Titre: ${project.title}
+- Promesse: ${project.promise}
+- Public: ${project.audience}
+- Niche: ${project.niche}
+- Ton: ${project.tone}
+
+Preface actuelle:
+${payload.frontMatter?.preface || ""}
+
+Introduction actuelle:
+${payload.frontMatter?.introduction || ""}
+
+Reprends ces deux textes et livre une version nettement plus developpee, plus editoriale, plus fluide et plus premium.
+- Preface visee: au moins 700 mots
+- Introduction visee: au moins 1000 mots
+- Aucun meta-commentaire
+- Aucun placeholder visible
+
+Retourne UNIQUEMENT un JSON valide:
+{
+  "frontMatter": {
+    "authorName": "${project.frontMatter.authorName}",
+    "publisherName": "${project.frontMatter.publisherName}",
+    "collectionName": "${project.frontMatter.collectionName}",
+    "isbn": "${project.frontMatter.isbn}",
+    "editionNote": "${project.frontMatter.editionNote}",
+    "copyrightNotice": "${project.frontMatter.copyrightNotice}",
+    "dedication": "${project.frontMatter.dedication}",
+    "preface": "...",
+    "introduction": "..."
+  }
 }`;
 }
 
@@ -750,6 +803,14 @@ export async function generateBookAsset(request: GenerationRequest): Promise<Gen
   }
 
   let normalized: GeneratedPayload = normalizePayload(request, parsed) as GeneratedPayload;
+
+  if (request.kind === "frontMatter" && needsFrontMatterExpansion(normalized)) {
+    const expandedRaw = await askModel(request.kind, frontMatterExpansionPrompt(request.project, normalized));
+    const expandedParsed = safeJsonParse(expandedRaw);
+    if (expandedParsed) {
+      normalized = normalizePayload(request, expandedParsed);
+    }
+  }
 
   if (needsChapterExpansion(request.project, request.chapterId, normalized)) {
     const chapter = request.project.chapters.find((item) => item.id === request.chapterId);
