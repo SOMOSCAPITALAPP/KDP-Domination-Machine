@@ -107,10 +107,20 @@ export function BookWorkspace({
     });
   }
 
+  function createApiProjectSnapshot(source: BookProject): BookProject {
+    return {
+      ...source,
+      chapters: source.chapters.map((chapter) => ({
+        ...chapter,
+        selectedIllustrationDataUrl: ""
+      }))
+    };
+  }
+
   async function generate(kind: GenerationKind, chapterId?: string) {
     try {
       startTask(kind, chapterId);
-      const projectSnapshot = latestProjectRef.current;
+      const projectSnapshot = createApiProjectSnapshot(latestProjectRef.current);
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -145,7 +155,7 @@ export function BookWorkspace({
     const response = await fetch("/api/export/pdf", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ project: latestProjectRef.current })
+      body: JSON.stringify({ project: createApiProjectSnapshot(latestProjectRef.current) })
     });
 
     if (!response.ok) {
@@ -170,6 +180,35 @@ export function BookWorkspace({
         model: headers.get("x-ai-model") || AI_MODEL_NAME
       } satisfies PdfPreviewMeta
     };
+  }
+
+  async function compressImageDataUrl(
+    dataUrl: string,
+    maxWidth = 448,
+    quality = 0.72
+  ) {
+    return new Promise<string>((resolve) => {
+      const image = new Image();
+      image.onload = () => {
+        const ratio = image.width > 0 ? Math.min(1, maxWidth / image.width) : 1;
+        const width = Math.max(1, Math.round(image.width * ratio));
+        const height = Math.max(1, Math.round(image.height * ratio));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext("2d");
+
+        if (!context) {
+          resolve(dataUrl);
+          return;
+        }
+
+        context.drawImage(image, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      image.onerror = () => resolve(dataUrl);
+      image.src = dataUrl;
+    });
   }
 
   function triggerBlobDownload(blob: Blob, fileName: string) {
@@ -220,7 +259,7 @@ export function BookWorkspace({
       const response = await fetch("/api/export/docx", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project: latestProjectRef.current })
+        body: JSON.stringify({ project: createApiProjectSnapshot(latestProjectRef.current) })
       });
 
       if (!response.ok) {
@@ -246,7 +285,7 @@ export function BookWorkspace({
       const response = await fetch("/api/export", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project: latestProjectRef.current })
+        body: JSON.stringify({ project: createApiProjectSnapshot(latestProjectRef.current) })
       });
 
       if (!response.ok) {
@@ -422,11 +461,15 @@ export function BookWorkspace({
                 imageOptions={chapterImageOptions[chapter.id] ?? []}
                 chapter={chapter}
                 translationMode={Boolean(project.translationSource)}
-                onChooseImage={(option) =>
+                onChooseImage={async (option) => {
+                  const compressed = await compressImageDataUrl(option.imageDataUrl);
                   onProjectChange(
-                    applySelectedChapterImage(latestProjectRef.current, chapter.id, option)
-                  )
-                }
+                    applySelectedChapterImage(latestProjectRef.current, chapter.id, {
+                      ...option,
+                      imageDataUrl: compressed
+                    })
+                  );
+                }}
                 onChange={(nextChapter) =>
                   patch({
                     chapters: project.chapters.map((item) =>
@@ -795,7 +838,7 @@ function ChapterEditor({
   chapterLocked: boolean;
   translationMode: boolean;
   imageOptions: ChapterImageOption[];
-  onChooseImage: (option: ChapterImageOption) => void;
+  onChooseImage: (option: ChapterImageOption) => void | Promise<void>;
 }) {
   const chapterProgress = Math.min(100, Math.round((chapter.wordCount / Math.max(1, chapter.targetWords)) * 100));
   const actionItems: Array<[GenerationKind, string]> = translationMode
