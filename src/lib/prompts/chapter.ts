@@ -29,11 +29,13 @@ ${instruction ?? "Version complete, concrete, humaine, pedagogique et dense, san
 
 Contraintes:
 - Va au bout du sujet et vise le plus de mots utiles possible.
-- Utilise une vraie structure avec sous-sections, exemples, transitions et conclusion locale.
+- Utilise une vraie structure de livre avec sous-parties naturelles, exemples et transitions.
 - Pas de meta-commentaire sur l'IA.
 - Pas de notes editoriales, pas d'explication de ta methode.
 - Ne coupe pas avant d'avoir vraiment traite le sujet.
 - La sortie doit etre du manuscrit pur.
+- Interdiction d'ecrire des balises ou libelles comme: "Resume:", "Objectif pedagogique:", "Conclusion locale", "Section 1", "Section 2", etc.
+- N'ajoute jamais de commentaires sur ce que fait le texte. Ecris seulement le texte du livre.
 
 Retourne UNIQUEMENT un JSON valide:
 {

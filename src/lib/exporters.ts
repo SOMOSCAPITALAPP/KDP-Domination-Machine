@@ -1,10 +1,12 @@
 import type { BookProject } from "@/lib/types";
+import { buildCleanManuscript } from "@/lib/manuscript";
 import { formatChapterMarkdown, getPdfPreviewMeta, getTotalWordCount, slugify } from "@/lib/utils";
 
 export function exportProjectBundle(project: BookProject) {
   const folderName = `${slugify(project.title)}-${project.id.slice(0, 8)}`;
   const pdfMeta = getPdfPreviewMeta(project);
   const coverBrief = project.packaging.coverBrief || "";
+  const manuscript = buildCleanManuscript(project);
 
   const markdown = [
     `# ${project.title}`,
@@ -24,7 +26,12 @@ export function exportProjectBundle(project: BookProject) {
     "## Table des matieres",
     project.tableOfContents,
     "",
-    ...project.chapters.map((chapter) => formatChapterMarkdown(chapter))
+    ...manuscript.map((entry) =>
+      formatChapterMarkdown({
+        ...entry.chapter,
+        content: entry.cleanText
+      })
+    )
   ].join("\n");
 
   const html = `<html><body>${markdown
@@ -43,7 +50,7 @@ export function exportProjectBundle(project: BookProject) {
     project.frontMatter.preface,
     project.frontMatter.introduction,
     project.tableOfContents,
-    ...project.chapters.map((chapter) => chapter.content)
+    ...manuscript.map((entry) => entry.cleanText)
   ].join("\n\n");
 
   const packaging = [

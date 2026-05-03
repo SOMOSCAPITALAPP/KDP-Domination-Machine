@@ -1,8 +1,12 @@
 import { PDFDocument, PDFFont, StandardFonts, rgb } from "pdf-lib";
+import { buildCleanManuscript, parseImageDataUrl } from "@/lib/manuscript";
 import type { BookProject } from "@/lib/types";
 import { getKdpMarginPreset, getPdfPreviewMeta, getTrimSizeDimensions } from "@/lib/utils";
 
 const POINTS_PER_INCH = 72;
+const BODY_FONT_SIZE = 12.5;
+const BODY_LINE_HEIGHT = 21;
+const PARAGRAPH_GAP = 12;
 const PDF_CHAR_REPLACEMENTS: Record<string, string> = {
   "\u00A0": " ",
   "\u2007": " ",
@@ -124,6 +128,7 @@ export async function buildProjectPdf(project: BookProject) {
     project.paperback.trimSize,
     project.paperback.bleed
   );
+  const manuscript = buildCleanManuscript(project);
   const meta = getPdfPreviewMeta(project);
   const margins = getKdpMarginPreset(meta.pageCount, project.paperback.bleed);
   const pageWidth = toPoints(widthIn);
@@ -187,7 +192,7 @@ export async function buildProjectPdf(project: BookProject) {
     font: typeof bodyFont,
     size: number,
     lineHeight: number,
-    gapAfter = 8
+    gapAfter = PARAGRAPH_GAP
   ) {
     const { left, right } = getPageMargins(pageNumber);
     const maxWidth = pageWidth - left - right;
@@ -199,9 +204,9 @@ export async function buildProjectPdf(project: BookProject) {
     cursorY -= gapAfter;
   }
 
-  function writeHeading(text: string, size: number) {
-    cursorY -= 6;
-    writeParagraph(text, titleFont, size, size + 4, 10);
+  function writeHeading(text: string, size: number, gapAfter = 12) {
+    cursorY -= 8;
+    writeParagraph(text, titleFont, size, size + 5, gapAfter);
   }
 
   function writeCenteredText(text: string, font: typeof bodyFont, size: number, y: number) {
@@ -214,6 +219,29 @@ export async function buildProjectPdf(project: BookProject) {
       size,
       color: rgb(0.12, 0.16, 0.22)
     });
+  }
+
+  async function drawChapterImage(dataUrl: string) {
+    const parsed = parseImageDataUrl(dataUrl);
+    if (!parsed) return;
+
+    const image =
+      parsed.mimeType === "image/png"
+        ? await pdfDoc.embedPng(parsed.bytes)
+        : await pdfDoc.embedJpg(parsed.bytes);
+
+    const { left, right } = getPageMargins(pageNumber);
+    const maxWidth = pageWidth - left - right;
+    const scaled = image.scaleToFit(maxWidth, toPoints(3.6));
+
+    ensureSpace(scaled.height + 28);
+    page.drawImage(image, {
+      x: left + (maxWidth - scaled.width) / 2,
+      y: cursorY - scaled.height,
+      width: scaled.width,
+      height: scaled.height
+    });
+    cursorY -= scaled.height + 18;
   }
 
   function drawFooter() {
@@ -235,52 +263,49 @@ export async function buildProjectPdf(project: BookProject) {
     cursorY = pageHeight - topMargin;
   }
 
-  writeCenteredText(project.title, titleFont, 22, pageHeight - toPoints(2));
+  writeCenteredText(project.title, titleFont, 24, pageHeight - toPoints(2.1));
   if (project.packaging.seoSubtitle || project.promise) {
     writeCenteredText(
       project.packaging.seoSubtitle || project.promise,
       italicFont,
-      13,
-      pageHeight - toPoints(2.55)
+      14,
+      pageHeight - toPoints(2.7)
     );
   }
   if (project.frontMatter.authorName) {
-    writeCenteredText(project.frontMatter.authorName, bodyFont, 12, pageHeight - toPoints(3.15));
-  }
-  if (project.frontMatter.collectionName) {
-    writeCenteredText(project.frontMatter.collectionName, italicFont, 11, pageHeight - toPoints(3.55));
+    writeCenteredText(project.frontMatter.authorName, bodyFont, 13, pageHeight - toPoints(3.35));
   }
   drawFooter();
   nextPage();
 
   writeHeading("Informations editoriales", 16);
   if (project.frontMatter.publisherName) {
-    writeParagraph(`Maison d'edition: ${project.frontMatter.publisherName}`, bodyFont, 11, 16, 6);
+    writeParagraph(`Maison d'edition: ${project.frontMatter.publisherName}`, bodyFont, 11.5, 18, 8);
   }
   if (project.frontMatter.collectionName) {
-    writeParagraph(`Collection: ${project.frontMatter.collectionName}`, bodyFont, 11, 16, 6);
+    writeParagraph(`Collection: ${project.frontMatter.collectionName}`, bodyFont, 11.5, 18, 8);
   }
   if (project.frontMatter.isbn) {
-    writeParagraph(`ISBN: ${project.frontMatter.isbn}`, bodyFont, 11, 16, 6);
+    writeParagraph(`ISBN: ${project.frontMatter.isbn}`, bodyFont, 11.5, 18, 8);
   }
   if (project.frontMatter.editionNote) {
-    writeParagraph(project.frontMatter.editionNote, bodyFont, 11, 16, 6);
+    writeParagraph(project.frontMatter.editionNote, bodyFont, 11.5, 18, 8);
   }
   if (project.frontMatter.copyrightNotice) {
-    writeParagraph(project.frontMatter.copyrightNotice, bodyFont, 11, 16, 6);
+    writeParagraph(project.frontMatter.copyrightNotice, bodyFont, 11.5, 18, 8);
   }
 
   if (project.frontMatter.dedication) {
     nextPage();
     writeHeading("Dedicace", 16);
-    writeParagraph(project.frontMatter.dedication, italicFont, 12, 18, 12);
+    writeParagraph(project.frontMatter.dedication, italicFont, 12.5, 20, 14);
   }
 
   if (project.frontMatter.preface) {
     nextPage();
     writeHeading("Preface", 18);
     for (const paragraph of splitParagraphs(project.frontMatter.preface)) {
-      writeParagraph(paragraph, bodyFont, 11, 17, 10);
+      writeParagraph(paragraph, bodyFont, BODY_FONT_SIZE, BODY_LINE_HEIGHT, PARAGRAPH_GAP);
     }
   }
 
@@ -288,7 +313,7 @@ export async function buildProjectPdf(project: BookProject) {
     nextPage();
     writeHeading("Introduction", 18);
     for (const paragraph of splitParagraphs(project.frontMatter.introduction)) {
-      writeParagraph(paragraph, bodyFont, 11, 17, 10);
+      writeParagraph(paragraph, bodyFont, BODY_FONT_SIZE, BODY_LINE_HEIGHT, PARAGRAPH_GAP);
     }
   }
 
@@ -298,32 +323,37 @@ export async function buildProjectPdf(project: BookProject) {
     ? project.tableOfContents.split("\n").map((item) => item.trim()).filter(Boolean)
     : project.chapters.map((chapter) => chapter.title);
   for (const line of tocLines) {
-    writeParagraph(line, bodyFont, 12, 17, 4);
+    writeParagraph(line, bodyFont, 12.5, 18, 6);
   }
 
-  for (const chapter of project.chapters) {
+  for (const entry of manuscript) {
     nextPage();
-    writeHeading(chapter.title, 18);
+    writeHeading(entry.chapter.title, 20, 16);
 
-    const contentParagraphs = splitParagraphs(chapter.content);
-    if (contentParagraphs.length === 0) {
-      writeParagraph("Chapitre a completer.", italicFont, 11, 16, 12);
+    if (entry.chapter.selectedIllustrationDataUrl) {
+      await drawChapterImage(entry.chapter.selectedIllustrationDataUrl);
+    }
+
+    if (entry.blocks.length === 0) {
+      writeParagraph("Chapitre a completer.", italicFont, 12, 18, 12);
       continue;
     }
 
-    for (const paragraph of contentParagraphs) {
-      if (paragraph.startsWith("### ")) {
-        writeHeading(paragraph.replace(/^###\s*/, ""), 14);
+    for (const block of entry.blocks) {
+      if (block.type === "heading") {
+        writeHeading(block.text, 15, 8);
         continue;
       }
 
-      const prefix = paragraph.startsWith("## ") ? paragraph.replace(/^##\s*/, "") : "";
-      if (prefix) {
-        writeHeading(prefix, 15);
+      if (block.type === "list") {
+        for (const item of block.items) {
+          writeParagraph(`- ${item}`, bodyFont, BODY_FONT_SIZE, BODY_LINE_HEIGHT, 6);
+        }
+        cursorY -= 4;
         continue;
       }
 
-      writeParagraph(paragraph, bodyFont, 11, 17, 10);
+      writeParagraph(block.text, bodyFont, BODY_FONT_SIZE, BODY_LINE_HEIGHT, PARAGRAPH_GAP);
     }
   }
 

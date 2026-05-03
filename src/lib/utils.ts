@@ -153,7 +153,7 @@ export function estimateProgress(project: BookProject) {
 }
 
 export function formatChapterMarkdown(chapter: Chapter) {
-  return `## ${chapter.title}\n\n${chapter.summary}\n\nIllustration suggeree: ${chapter.illustrationPrompt}\n\n${chapter.content}`.trim();
+  return `## ${chapter.title}\n\n${chapter.content}`.trim();
 }
 
 export function getPdfPreviewMeta(project: BookProject) {

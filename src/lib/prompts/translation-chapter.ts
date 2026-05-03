@@ -40,6 +40,11 @@ ${instruction ?? "Traduction integrale, professionnelle, fidele et naturelle, sa
 Texte source a traduire:
 ${chapter.sourceContent || chapter.content}
 
+Contraintes de sortie:
+- La sortie doit etre du manuscrit pur.
+- N'ecris jamais: "Resume:", "Objectif pedagogique:", "Conclusion locale", "Section 1", "Section 2" ou toute note de travail.
+- Ne rajoute aucun commentaire explicatif sur la traduction.
+
 Retourne UNIQUEMENT un JSON valide:
 {
   "chapterContent": "..."
