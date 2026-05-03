@@ -6,7 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { BOOK_FORMATS, BOOK_TYPES, DEPTH_LEVELS, TONES } from "@/lib/constants";
-import type { BookProjectInput } from "@/lib/types";
+import type {
+  BookFormat,
+  BookProjectInput,
+  BookTone,
+  BookType,
+  DepthLevel
+} from "@/lib/types";
 
 export function NewBookDialog({
   onCreate
@@ -45,22 +51,34 @@ export function NewBookDialog({
         <Input value={form.language} onChange={(event) => update("language", event.target.value)} placeholder="Langue" />
         <Input value={form.niche} onChange={(event) => update("niche", event.target.value)} placeholder="Niche" />
         <Input value={form.audience} onChange={(event) => update("audience", event.target.value)} placeholder="Public cible" />
-        <Select value={form.format} onChange={(event) => update("format", event.target.value)}>
+        <Select
+          value={form.format}
+          onChange={(event) => update("format", event.target.value as BookFormat)}
+        >
           {BOOK_FORMATS.map((item) => (
             <option key={item}>{item}</option>
           ))}
         </Select>
-        <Select value={form.type} onChange={(event) => update("type", event.target.value)}>
+        <Select
+          value={form.type}
+          onChange={(event) => update("type", event.target.value as BookType)}
+        >
           {BOOK_TYPES.map((item) => (
             <option key={item}>{item}</option>
           ))}
         </Select>
-        <Select value={form.tone} onChange={(event) => update("tone", event.target.value)}>
+        <Select
+          value={form.tone}
+          onChange={(event) => update("tone", event.target.value as BookTone)}
+        >
           {TONES.map((item) => (
             <option key={item}>{item}</option>
           ))}
         </Select>
-        <Select value={form.depth} onChange={(event) => update("depth", event.target.value)}>
+        <Select
+          value={form.depth}
+          onChange={(event) => update("depth", event.target.value as DepthLevel)}
+        >
           {DEPTH_LEVELS.map((item) => (
             <option key={item}>{item}</option>
           ))}
@@ -89,4 +107,3 @@ export function NewBookDialog({
     </div>
   );
 }
-
