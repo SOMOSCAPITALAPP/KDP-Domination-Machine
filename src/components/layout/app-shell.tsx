@@ -9,6 +9,7 @@ import { BookWorkspace } from "@/components/projects/book-workspace";
 import { RightRail } from "@/components/projects/right-rail";
 import { demoProject } from "@/lib/demo-data";
 import { createProject, loadProjects, saveProjects } from "@/lib/storage";
+import { normalizeProject } from "@/lib/storage";
 import type {
   BookProject,
   BookProjectInput,
@@ -64,9 +65,35 @@ export function AppShell() {
 
   async function importJson(file: File) {
     const text = await file.text();
-    const imported = JSON.parse(text) as BookProject[];
+    const imported = (JSON.parse(text) as BookProject[]).map(normalizeProject);
     persist(imported);
     setActiveId(imported[0]?.id ?? "");
+  }
+
+  async function importTemplate(payload: {
+    file: File;
+    collectionName: string;
+    targetVolumeTopic: string;
+  }) {
+    const formData = new FormData();
+    formData.set("file", payload.file);
+    formData.set("collectionName", payload.collectionName);
+    formData.set("targetVolumeTopic", payload.targetVolumeTopic);
+
+    const response = await fetch("/api/template/import", {
+      method: "POST",
+      body: formData
+    });
+
+    const data = (await response.json()) as { project?: BookProject; error?: string };
+    if (!response.ok || !data.project) {
+      throw new Error(data.error ?? "Import du modele impossible.");
+    }
+
+    const project = normalizeProject(data.project);
+    const nextProjects = [project, ...projects];
+    persist(nextProjects);
+    setActiveId(project.id);
   }
 
   async function logout() {
@@ -89,6 +116,7 @@ export function AppShell() {
         onStatusChange={updateStatus}
         onCreate={createNewProject}
         onImport={importJson}
+        onImportTemplate={(payload) => importTemplate(payload)}
         projects={projects}
       />
       <section className="space-y-4">
@@ -103,4 +131,3 @@ export function AppShell() {
     </main>
   );
 }
-

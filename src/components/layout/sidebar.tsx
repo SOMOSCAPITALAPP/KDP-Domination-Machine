@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { ImportCollectionTemplateDialog } from "@/components/projects/import-collection-template-dialog";
 import { NewBookDialog } from "@/components/projects/new-book-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,11 @@ type SidebarProps = {
   onSelect: (id: string) => void;
   onCreate: (input: BookProjectInput) => void;
   onImport: (file: File) => Promise<void>;
+  onImportTemplate: (payload: {
+    file: File;
+    collectionName: string;
+    targetVolumeTopic: string;
+  }) => Promise<void>;
   onStatusChange: (projectId: string, status: BookStatus) => void;
 };
 
@@ -22,6 +28,7 @@ export function Sidebar({
   onSelect,
   onCreate,
   onImport,
+  onImportTemplate,
   onStatusChange
 }: SidebarProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -38,6 +45,7 @@ export function Sidebar({
 
       <div className="space-y-3">
         <NewBookDialog onCreate={onCreate} />
+        <ImportCollectionTemplateDialog onImport={onImportTemplate} />
         <Button
           className="w-full bg-white text-ink hover:bg-slate-50"
           variant="secondary"
@@ -100,4 +108,3 @@ export function Sidebar({
     </aside>
   );
 }
-

@@ -1,4 +1,9 @@
-import { DEFAULT_PAPERBACK_LAYOUT, defaultFrontMatter, initialCompliance } from "@/lib/constants";
+import {
+  DEFAULT_PAPERBACK_LAYOUT,
+  defaultCollectionTemplate,
+  defaultFrontMatter,
+  initialCompliance
+} from "@/lib/constants";
 import type { BookProject, BookProjectInput, Chapter, ComplianceItem } from "@/lib/types";
 import { createChapter, estimateProgress, getFormatPlan, uid } from "@/lib/utils";
 
@@ -42,7 +47,8 @@ export function createProject(input: BookProjectInput): BookProject {
       coverBrief: ""
     },
     paperback: { ...DEFAULT_PAPERBACK_LAYOUT },
-    frontMatter: defaultFrontMatter()
+    frontMatter: defaultFrontMatter(),
+    collectionTemplate: defaultCollectionTemplate()
   };
 }
 
@@ -143,7 +149,51 @@ export function normalizeProject(raw: unknown): BookProject {
     frontMatter: {
       ...defaultFrontMatter(),
       ...(typeof input.frontMatter === "object" && input.frontMatter ? input.frontMatter : {})
-    }
+    },
+    collectionTemplate:
+      typeof input.collectionTemplate === "object" && input.collectionTemplate
+        ? {
+            sourceFileName:
+              typeof input.collectionTemplate.sourceFileName === "string"
+                ? input.collectionTemplate.sourceFileName
+                : "",
+            sourceTitle:
+              typeof input.collectionTemplate.sourceTitle === "string"
+                ? input.collectionTemplate.sourceTitle
+                : "",
+            sourceType:
+              input.collectionTemplate.sourceType === "docx" ? "docx" : "pdf",
+            collectionName:
+              typeof input.collectionTemplate.collectionName === "string"
+                ? input.collectionTemplate.collectionName
+                : "",
+            targetVolumeTopic:
+              typeof input.collectionTemplate.targetVolumeTopic === "string"
+                ? input.collectionTemplate.targetVolumeTopic
+                : "",
+            recurringPromise:
+              typeof input.collectionTemplate.recurringPromise === "string"
+                ? input.collectionTemplate.recurringPromise
+                : "",
+            structureNotes:
+              typeof input.collectionTemplate.structureNotes === "string"
+                ? input.collectionTemplate.structureNotes
+                : "",
+            chapterPattern: Array.isArray(input.collectionTemplate.chapterPattern)
+              ? input.collectionTemplate.chapterPattern.filter(
+                  (item): item is string => typeof item === "string"
+                )
+              : [],
+            illustrationStyle:
+              typeof input.collectionTemplate.illustrationStyle === "string"
+                ? input.collectionTemplate.illustrationStyle
+                : "",
+            sourceExcerpt:
+              typeof input.collectionTemplate.sourceExcerpt === "string"
+                ? input.collectionTemplate.sourceExcerpt
+                : ""
+          }
+        : defaultCollectionTemplate()
   };
 
   project.progress = estimateProgress(project);

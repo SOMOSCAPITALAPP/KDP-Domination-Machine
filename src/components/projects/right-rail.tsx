@@ -46,6 +46,20 @@ export function RightRail({ activeProject }: { activeProject: BookProject | null
         </p>
       </Card>
 
+      {activeProject.collectionTemplate ? (
+        <Card title="Modele de collection">
+          <p className="text-sm text-slate-600">
+            Source: {activeProject.collectionTemplate.sourceFileName}
+          </p>
+          <p className="mt-2 text-sm text-slate-600">
+            Collection: {activeProject.collectionTemplate.collectionName || "Non renseignee"}
+          </p>
+          <p className="mt-2 text-xs text-slate-500">
+            Nouveau volume: {activeProject.collectionTemplate.targetVolumeTopic || "Sujet a definir"}
+          </p>
+        </Card>
+      ) : null}
+
       <Card title="Checklist IA KDP">
         <p className="text-sm text-slate-600">
           {completedChecklist}/{totalChecklist} items valides avant upload.

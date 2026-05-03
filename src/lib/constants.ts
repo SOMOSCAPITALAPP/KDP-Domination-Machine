@@ -55,6 +55,10 @@ export function defaultFrontMatter(): FrontMatterData {
   };
 }
 
+export function defaultCollectionTemplate() {
+  return null;
+}
+
 export const PROJECT_STATUSES: BookStatus[] = [
   "Idee",
   "Concept valide",

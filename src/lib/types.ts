@@ -90,6 +90,19 @@ export type FrontMatterData = {
   introduction: string;
 };
 
+export type CollectionTemplate = {
+  sourceFileName: string;
+  sourceTitle: string;
+  sourceType: "pdf" | "docx";
+  collectionName: string;
+  targetVolumeTopic: string;
+  recurringPromise: string;
+  structureNotes: string;
+  chapterPattern: string[];
+  illustrationStyle: string;
+  sourceExcerpt: string;
+};
+
 export type PdfPreviewMeta = {
   pageCount: number;
   trimSize: TrimSize;
@@ -125,6 +138,7 @@ export type BookProject = BookProjectInput & {
   packaging: PackagingData;
   paperback: PaperbackLayout;
   frontMatter: FrontMatterData;
+  collectionTemplate: CollectionTemplate | null;
 };
 
 export type GenerationKind =
@@ -167,6 +181,7 @@ export type GeneratedPayload = Partial<{
   compliance: ComplianceItem[];
   packaging: Partial<PackagingData>;
   frontMatter: Partial<FrontMatterData>;
+  collectionTemplate: CollectionTemplate | null;
 }>;
 
 export type BookProjectSectionKey =
