@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import { buildCleanManuscript } from "@/lib/manuscript";
+import { sanitizeForPdfText } from "@/lib/pdf-text";
 import type { BookProject } from "@/lib/types";
 import { estimatePaperbackPageCount, getKdpMarginPreset, getTrimSizeDimensions } from "@/lib/utils";
 
@@ -135,7 +136,8 @@ export async function computeBookLayoutPlan(project: BookProject): Promise<BookL
       gapAfter: number
     ) {
       const { maxWidth } = getHorizontalSpace(pageNumber);
-      const lines = wrapText(text, maxWidth, size, (value, currentSize) =>
+      const safeText = sanitizeForPdfText(text, font);
+      const lines = wrapText(safeText, maxWidth, size, (value, currentSize) =>
         font.widthOfTextAtSize(value, currentSize)
       );
 
