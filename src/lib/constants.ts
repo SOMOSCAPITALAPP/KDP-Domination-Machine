@@ -1,4 +1,15 @@
-import type { BookFormat, BookStatus, BookTone, BookType, ComplianceItem, DepthLevel } from "@/lib/types";
+import type {
+  BookFormat,
+  BookStatus,
+  BookTone,
+  BookType,
+  ComplianceItem,
+  DepthLevel,
+  PaperbackLayout,
+  TrimSize
+} from "@/lib/types";
+
+export const AI_MODEL_NAME = "gpt-4.1-mini";
 
 export const BOOK_FORMATS: BookFormat[] = [
   "50 pages",
@@ -10,34 +21,41 @@ export const BOOK_FORMATS: BookFormat[] = [
 
 export const BOOK_TYPES: BookType[] = [
   "guide pratique",
-  "développement personnel",
-  "ésotérisme",
+  "developpement personnel",
+  "esoterisme",
   "finance",
-  "lithothérapie",
-  "journal guidé",
+  "lithotherapie",
+  "journal guide",
   "livre business",
   "autre"
 ];
 
-export const TONES: BookTone[] = ["expert", "émotionnel", "pédagogique", "premium", "populaire"];
-export const DEPTH_LEVELS: DepthLevel[] = ["léger", "standard", "profond"];
+export const TONES: BookTone[] = ["expert", "emotionnel", "pedagogique", "premium", "populaire"];
+export const DEPTH_LEVELS: DepthLevel[] = ["leger", "standard", "profond"];
+export const TRIM_SIZES: TrimSize[] = ["5 x 8 in", "6 x 9 in", "8.5 x 11 in"];
+
+export const DEFAULT_PAPERBACK_LAYOUT: PaperbackLayout = {
+  trimSize: "6 x 9 in",
+  bleed: false,
+  pageNumbers: true
+};
 
 export const PROJECT_STATUSES: BookStatus[] = [
-  "Idée",
-  "Concept validé",
+  "Idee",
+  "Concept valide",
   "Plan",
-  "Rédaction",
+  "Redaction",
   "Correction",
   "Mise en page",
-  "KDP prêt",
-  "Publié"
+  "KDP pret",
+  "Publie"
 ];
 
 export const MODULES = [
   "Dashboard",
   "Concept",
   "Plan",
-  "Rédaction",
+  "Redaction",
   "Correction",
   "Packaging",
   "Export",
@@ -48,62 +66,62 @@ export function initialCompliance(): ComplianceItem[] {
   return [
     {
       id: "originality",
-      label: "Originalité vérifiée",
-      note: "Le contenu doit être propre au projet et ne pas reprendre un ouvrage existant.",
+      label: "Originalite verifiee",
+      note: "Le contenu doit etre original et ne pas reprendre un ouvrage existant.",
       checked: false
     },
     {
       id: "plagiarism",
       label: "Pas de plagiat volontaire",
-      note: "Valider les sources, citations et reformulations.",
+      note: "Verifier les sources, citations et reformulations.",
       checked: false
     },
     {
       id: "ai-disclosure",
-      label: "Contenu IA déclaré si nécessaire",
-      note: "Amazon distingue AI-generated et AI-assisted dans le formulaire KDP.",
+      label: "Contenu IA declare si necessaire",
+      note: "KDP demande de declarer le contenu AI-generated, pas le contenu AI-assisted.",
       checked: false
     },
     {
       id: "title",
       label: "Titre conforme",
-      note: "Titre clair, non trompeur, cohérent avec le manuscrit.",
+      note: "Le titre doit rester clair, non trompeur et coherent avec le manuscrit.",
       checked: false
     },
     {
       id: "cover",
       label: "Couverture conforme",
-      note: "Fichier couverture séparé, bon format, 300 DPI recommandé.",
+      note: "Paperback: fichier couverture separe, dimensions exactes et images 300 DPI.",
       checked: false
     },
     {
       id: "interior",
-      label: "Intérieur relu",
-      note: "Orthographe, cohérence, structure et style validés.",
+      label: "Interieur relu",
+      note: "Orthographe, coherence, structure et style valides.",
       checked: false
     },
     {
       id: "claims",
-      label: "Pas de fausses promesses médicales, financières ou juridiques",
-      note: "Supprimer toute promesse dangereuse, trompeuse ou trop absolue.",
+      label: "Pas de promesses medicales, financieres ou juridiques trompeuses",
+      note: "Supprimer toute promesse dangereuse, absolue ou trompeuse.",
       checked: false
     },
     {
       id: "margins",
-      label: "Marges et format vérifiés",
-      note: "Vérifier dimensions, fond perdu, marges et PDF intérieur.",
+      label: "Marges et format verifies",
+      note: "Verifier trim size, marges miroir, bleed et PDF interieur.",
       checked: false
     },
     {
       id: "description",
-      label: "Description Amazon prête",
-      note: "Description claire, vendeuse et honnête.",
+      label: "Description Amazon prete",
+      note: "Description claire, vendeuse et honnete.",
       checked: false
     },
     {
       id: "metadata",
-      label: "Mots-clés et catégories prêts",
-      note: "Backend keywords et catégories alignés au positionnement.",
+      label: "Mots-cles et categories prets",
+      note: "Backend keywords et categories alignes au positionnement.",
       checked: false
     }
   ];
@@ -111,22 +129,21 @@ export function initialCompliance(): ComplianceItem[] {
 
 export const KDP_OFFICIAL_NOTES = [
   {
-    title: "Déclaration IA KDP",
+    title: "Declaration IA KDP",
     summary:
-      "KDP demande de déclarer si un contenu est AI-generated, tout en distinguant ce cas du contenu AI-assisted.",
+      "KDP demande de declarer le contenu AI-generated. Le contenu AI-assisted n'a pas a etre declare.",
     url: "https://kdp.amazon.com/en_US/help/topic/G200672390"
   },
   {
-    title: "Couverture paperback",
+    title: "Paperback couverture",
     summary:
-      "Le paperback attend un fichier couverture distinct et KDP détaille les exigences de dimensions, fond perdu et PDF prêt à l’impression.",
+      "Le paperback attend un fichier couverture separe. Les dimensions et le PDF couverture doivent respecter le calcul KDP.",
     url: "https://kdp.amazon.com/en_US/help/topic/G201953020"
   },
   {
-    title: "Préparation du manuscrit intérieur",
+    title: "Manuscrit interieur PDF",
     summary:
-      "Le fichier intérieur doit respecter les règles de formatage, marges, qualité d’image et export PDF pour éviter les erreurs d’upload.",
+      "Le trim size doit etre fixe avant les marges. KDP recommande des marges miroir et un PDF interieur propre avant upload.",
     url: "https://kdp.amazon.com/en_US/help/topic/G202145400"
   }
 ];
-

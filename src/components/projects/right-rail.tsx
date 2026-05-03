@@ -1,8 +1,9 @@
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { KDP_OFFICIAL_NOTES, MODULES } from "@/lib/constants";
+import { AI_MODEL_NAME, KDP_OFFICIAL_NOTES, MODULES } from "@/lib/constants";
 import { googleDriveRoadmap } from "@/lib/google-drive";
 import type { BookProject } from "@/lib/types";
+import { getPdfPreviewMeta, getTotalWordCount, getTotalWordGoal } from "@/lib/utils";
 
 export function RightRail({ activeProject }: { activeProject: BookProject | null }) {
   if (!activeProject) {
@@ -11,24 +12,43 @@ export function RightRail({ activeProject }: { activeProject: BookProject | null
 
   const completedChecklist = activeProject.compliance.filter((item) => item.checked).length;
   const totalChecklist = activeProject.compliance.length;
+  const pdfMeta = getPdfPreviewMeta(activeProject);
+  const actualWords = getTotalWordCount(activeProject);
+  const goalWords = getTotalWordGoal(activeProject);
 
   return (
     <aside className="space-y-4">
+      <Card title="Modele IA">
+        <div className="text-2xl font-semibold text-ink">{AI_MODEL_NAME}</div>
+        <p className="mt-2 text-sm text-slate-600">
+          L'application est verrouillee sur GPT 4.1 mini pour limiter les couts et garder un workflow constant.
+        </p>
+      </Card>
+
       <Card title="Score commercial">
         <div className="text-4xl font-semibold text-ink">{activeProject.commercialScore}</div>
         <p className="mt-2 text-sm text-slate-600">
-          Score interne basé sur promesse, différenciation, lisibilité et potentiel niche.
+          Score interne base sur promesse, differenciation, lisibilite et potentiel niche.
         </p>
       </Card>
 
       <Card title="Progression projet">
         <Progress value={activeProject.progress} />
-        <p className="mt-3 text-sm text-slate-600">{activeProject.progress}% du workflow estimé.</p>
+        <p className="mt-3 text-sm text-slate-600">{activeProject.progress}% du workflow estime.</p>
+      </Card>
+
+      <Card title="Volume manuscrit">
+        <p className="text-sm text-slate-600">
+          {actualWords} mots ecrits sur {goalWords} mots cibles.
+        </p>
+        <p className="mt-2 text-xs text-slate-500">
+          Estimation PDF interieur: {pdfMeta.pageCount} pages en {pdfMeta.trimSize}.
+        </p>
       </Card>
 
       <Card title="Checklist IA KDP">
         <p className="text-sm text-slate-600">
-          {completedChecklist}/{totalChecklist} items validés avant upload.
+          {completedChecklist}/{totalChecklist} items valides avant upload.
         </p>
         <div className="mt-3 space-y-2">
           {activeProject.compliance.slice(0, 5).map((item) => (
@@ -50,7 +70,7 @@ export function RightRail({ activeProject }: { activeProject: BookProject | null
         </div>
       </Card>
 
-      <Card title="Références officielles KDP">
+      <Card title="References officielles KDP">
         <div className="space-y-3 text-sm">
           {KDP_OFFICIAL_NOTES.map((note) => (
             <div key={note.title} className="rounded-xl bg-slate-50 p-3">
@@ -75,4 +95,3 @@ export function RightRail({ activeProject }: { activeProject: BookProject | null
     </aside>
   );
 }
-

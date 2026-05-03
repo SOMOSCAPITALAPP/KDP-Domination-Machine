@@ -22,7 +22,7 @@ export function NewBookDialog({
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<BookProjectInput>({
     title: "Nouveau projet KDP",
-    language: "Français",
+    language: "Francais",
     niche: "",
     audience: "",
     format: "100 pages",
@@ -51,34 +51,22 @@ export function NewBookDialog({
         <Input value={form.language} onChange={(event) => update("language", event.target.value)} placeholder="Langue" />
         <Input value={form.niche} onChange={(event) => update("niche", event.target.value)} placeholder="Niche" />
         <Input value={form.audience} onChange={(event) => update("audience", event.target.value)} placeholder="Public cible" />
-        <Select
-          value={form.format}
-          onChange={(event) => update("format", event.target.value as BookFormat)}
-        >
+        <Select value={form.format} onChange={(event) => update("format", event.target.value as BookFormat)}>
           {BOOK_FORMATS.map((item) => (
             <option key={item}>{item}</option>
           ))}
         </Select>
-        <Select
-          value={form.type}
-          onChange={(event) => update("type", event.target.value as BookType)}
-        >
+        <Select value={form.type} onChange={(event) => update("type", event.target.value as BookType)}>
           {BOOK_TYPES.map((item) => (
             <option key={item}>{item}</option>
           ))}
         </Select>
-        <Select
-          value={form.tone}
-          onChange={(event) => update("tone", event.target.value as BookTone)}
-        >
+        <Select value={form.tone} onChange={(event) => update("tone", event.target.value as BookTone)}>
           {TONES.map((item) => (
             <option key={item}>{item}</option>
           ))}
         </Select>
-        <Select
-          value={form.depth}
-          onChange={(event) => update("depth", event.target.value as DepthLevel)}
-        >
+        <Select value={form.depth} onChange={(event) => update("depth", event.target.value as DepthLevel)}>
           {DEPTH_LEVELS.map((item) => (
             <option key={item}>{item}</option>
           ))}
@@ -97,7 +85,7 @@ export function NewBookDialog({
               setOpen(false);
             }}
           >
-            Créer
+            Creer
           </Button>
           <Button variant="ghost" onClick={() => setOpen(false)}>
             Fermer

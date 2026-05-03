@@ -1,25 +1,26 @@
 export type BookStatus =
-  | "Idée"
-  | "Concept validé"
+  | "Idee"
+  | "Concept valide"
   | "Plan"
-  | "Rédaction"
+  | "Redaction"
   | "Correction"
   | "Mise en page"
-  | "KDP prêt"
-  | "Publié";
+  | "KDP pret"
+  | "Publie";
 
 export type BookFormat = "50 pages" | "100 pages" | "200 pages" | "250 pages" | "300 pages";
-export type BookTone = "expert" | "émotionnel" | "pédagogique" | "premium" | "populaire";
+export type BookTone = "expert" | "emotionnel" | "pedagogique" | "premium" | "populaire";
 export type BookType =
   | "guide pratique"
-  | "développement personnel"
-  | "ésotérisme"
+  | "developpement personnel"
+  | "esoterisme"
   | "finance"
-  | "lithothérapie"
-  | "journal guidé"
+  | "lithotherapie"
+  | "journal guide"
   | "livre business"
   | "autre";
-export type DepthLevel = "léger" | "standard" | "profond";
+export type DepthLevel = "leger" | "standard" | "profond";
+export type TrimSize = "5 x 8 in" | "6 x 9 in" | "8.5 x 11 in";
 
 export type BookProjectInput = {
   title: string;
@@ -70,6 +71,24 @@ export type PackagingData = {
   coverBrief: string;
 };
 
+export type PaperbackLayout = {
+  trimSize: TrimSize;
+  bleed: boolean;
+  pageNumbers: boolean;
+};
+
+export type PdfPreviewMeta = {
+  pageCount: number;
+  trimSize: TrimSize;
+  bleed: boolean;
+  insideMarginIn: number;
+  outsideMarginIn: number;
+  topMarginIn: number;
+  bottomMarginIn: number;
+  estimatedWords: number;
+  model: string;
+};
+
 export type BookProject = BookProjectInput & {
   id: string;
   status: BookStatus;
@@ -91,6 +110,7 @@ export type BookProject = BookProjectInput & {
   chapters: Chapter[];
   compliance: ComplianceItem[];
   packaging: PackagingData;
+  paperback: PaperbackLayout;
 };
 
 export type GenerationKind =

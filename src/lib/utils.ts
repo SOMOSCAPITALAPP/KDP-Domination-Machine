@@ -1,9 +1,8 @@
-import { clsx } from "clsx";
-import { twMerge } from "tailwind-merge";
-import type { BookProject, Chapter } from "@/lib/types";
+import { AI_MODEL_NAME } from "@/lib/constants";
+import type { BookFormat, BookProject, Chapter, TrimSize } from "@/lib/types";
 
 export function cn(...inputs: Array<string | undefined | false | null>) {
-  return twMerge(clsx(inputs));
+  return inputs.filter(Boolean).join(" ");
 }
 
 export function slugify(value: string) {
@@ -19,6 +18,26 @@ export function uid(prefix = "id") {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+export function getFormatPlan(format: BookFormat) {
+  if (format === "50 pages") {
+    return { chapterCount: 10, targetWords: 1400, totalWordsGoal: 14000 };
+  }
+  if (format === "100 pages") {
+    return { chapterCount: 12, targetWords: 2000, totalWordsGoal: 24000 };
+  }
+  if (format === "200 pages") {
+    return { chapterCount: 14, targetWords: 3200, totalWordsGoal: 44800 };
+  }
+  if (format === "250 pages") {
+    return { chapterCount: 16, targetWords: 3600, totalWordsGoal: 57600 };
+  }
+  return { chapterCount: 18, targetWords: 4000, totalWordsGoal: 72000 };
+}
+
+export function defaultTrimSize(): TrimSize {
+  return "6 x 9 in";
+}
+
 export function createChapter(index: number, targetWords: number): Chapter {
   return {
     id: uid("chapter"),
@@ -32,16 +51,71 @@ export function createChapter(index: number, targetWords: number): Chapter {
   };
 }
 
+export function countWords(text: string) {
+  return text.split(/\s+/).filter(Boolean).length;
+}
+
+export function getTotalWordCount(project: BookProject) {
+  return project.chapters.reduce((sum, chapter) => sum + chapter.wordCount, 0);
+}
+
+export function getTotalWordGoal(project: BookProject) {
+  return project.chapters.reduce((sum, chapter) => sum + chapter.targetWords, 0);
+}
+
+export function estimatePaperbackPageCount(project: BookProject) {
+  const actualWords = getTotalWordCount(project);
+  const estimatedWords = actualWords > 0 ? actualWords : getTotalWordGoal(project);
+  return Math.max(24, Math.ceil(estimatedWords / 230) + 4);
+}
+
+export function getKdpMarginPreset(pageCount: number, bleed: boolean) {
+  const insideMarginIn =
+    pageCount <= 150
+      ? 0.375
+      : pageCount <= 300
+        ? 0.5
+        : pageCount <= 500
+          ? 0.625
+          : pageCount <= 700
+            ? 0.75
+            : 0.875;
+
+  return {
+    insideMarginIn,
+    outsideMarginIn: bleed ? 0.375 : 0.375,
+    topMarginIn: 0.75,
+    bottomMarginIn: 0.75
+  };
+}
+
+export function getTrimSizeDimensions(trimSize: TrimSize, bleed: boolean) {
+  const base =
+    trimSize === "5 x 8 in"
+      ? { widthIn: 5, heightIn: 8 }
+      : trimSize === "8.5 x 11 in"
+        ? { widthIn: 8.5, heightIn: 11 }
+        : { widthIn: 6, heightIn: 9 };
+
+  if (!bleed) return base;
+
+  return {
+    widthIn: base.widthIn + 0.125,
+    heightIn: base.heightIn + 0.25
+  };
+}
+
 export function estimateProgress(project: BookProject) {
   let done = 0;
-  const total = 7;
+  const total = 8;
   if (project.promise) done += 1;
   if (project.tableOfContents) done += 1;
   if (project.chapters.some((chapter) => chapter.content.trim().length > 0)) done += 1;
+  if (project.chapters.every((chapter) => chapter.wordCount >= Math.round(chapter.targetWords * 0.7))) done += 1;
   if (project.correctionNotes) done += 1;
   if (project.packaging.amazonDescription) done += 1;
   if (project.compliance.some((item) => item.checked)) done += 1;
-  if (project.chapters.every((chapter) => chapter.wordCount > 300)) done += 1;
+  if (project.packaging.coverBrief || project.packaging.keywords.length > 0) done += 1;
   return Math.round((done / total) * 100);
 }
 
@@ -49,3 +123,19 @@ export function formatChapterMarkdown(chapter: Chapter) {
   return `## ${chapter.title}\n\n${chapter.summary}\n\n${chapter.content}`.trim();
 }
 
+export function getPdfPreviewMeta(project: BookProject) {
+  const pageCount = estimatePaperbackPageCount(project);
+  const margins = getKdpMarginPreset(pageCount, project.paperback.bleed);
+
+  return {
+    pageCount,
+    trimSize: project.paperback.trimSize,
+    bleed: project.paperback.bleed,
+    insideMarginIn: margins.insideMarginIn,
+    outsideMarginIn: margins.outsideMarginIn,
+    topMarginIn: margins.topMarginIn,
+    bottomMarginIn: margins.bottomMarginIn,
+    estimatedWords: getTotalWordCount(project) || getTotalWordGoal(project),
+    model: AI_MODEL_NAME
+  };
+}

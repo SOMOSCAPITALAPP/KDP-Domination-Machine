@@ -1,22 +1,25 @@
 "use client";
 
-import { useDeferredValue, useEffect, useState } from "react";
-import { Download, FileCheck2, Sparkles, Wand2 } from "lucide-react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { Download, Eye, FileCheck2, FileText, Sparkles, Wand2 } from "lucide-react";
 import { SectionCard } from "@/components/projects/section-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { Select } from "@/components/ui/select";
 import { Tabs } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { initialCompliance } from "@/lib/constants";
-import { estimateProgress, slugify } from "@/lib/utils";
+import { AI_MODEL_NAME, TRIM_SIZES, initialCompliance } from "@/lib/constants";
+import { estimateProgress, getPdfPreviewMeta, getTotalWordCount, getTotalWordGoal, slugify } from "@/lib/utils";
 import type {
   BookProject,
   BookProjectSectionKey,
   Chapter,
   GeneratedPayload,
-  GenerationKind
+  GenerationKind,
+  PdfPreviewMeta,
+  TrimSize
 } from "@/lib/types";
 
 const TAB_ITEMS: { id: BookProjectSectionKey; label: string }[] = [
@@ -38,7 +41,11 @@ export function BookWorkspace({
 }) {
   const [tab, setTab] = useState<BookProjectSectionKey>("overview");
   const [busy, setBusy] = useState<string>("");
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string>("");
+  const [pdfMeta, setPdfMeta] = useState<PdfPreviewMeta | null>(null);
   const deferredProject = useDeferredValue(project);
+  const actualWords = useMemo(() => getTotalWordCount(project), [project]);
+  const goalWords = useMemo(() => getTotalWordGoal(project), [project]);
 
   useEffect(() => {
     const next = {
@@ -50,6 +57,12 @@ export function BookWorkspace({
       onProjectChange(next);
     }
   }, [onProjectChange, project]);
+
+  useEffect(() => {
+    return () => {
+      if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
+    };
+  }, [pdfPreviewUrl]);
 
   function patch(partial: Partial<BookProject>) {
     onProjectChange({
@@ -76,6 +89,72 @@ export function BookWorkspace({
 
     const updated = applyGeneratedPayload(project, kind, data, chapterId);
     onProjectChange(updated);
+  }
+
+  async function requestPdf() {
+    const response = await fetch("/api/export/pdf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project })
+    });
+
+    if (!response.ok) {
+      const data = (await response.json()) as { error?: string };
+      throw new Error(data.error ?? "PDF impossible.");
+    }
+
+    const blob = await response.blob();
+    const headers = response.headers;
+
+    return {
+      blob,
+      meta: {
+        pageCount: Number(headers.get("x-kdp-page-count") || 0),
+        trimSize: (headers.get("x-kdp-trim-size") || project.paperback.trimSize) as TrimSize,
+        bleed: headers.get("x-kdp-bleed") === "yes",
+        insideMarginIn: Number(headers.get("x-kdp-inside-margin") || 0),
+        outsideMarginIn: Number(headers.get("x-kdp-outside-margin") || 0),
+        topMarginIn: Number(headers.get("x-kdp-top-margin") || 0),
+        bottomMarginIn: Number(headers.get("x-kdp-bottom-margin") || 0),
+        estimatedWords: actualWords || goalWords,
+        model: headers.get("x-ai-model") || AI_MODEL_NAME
+      } satisfies PdfPreviewMeta
+    };
+  }
+
+  async function previewPdf() {
+    try {
+      setBusy("preview-pdf");
+      const { blob, meta } = await requestPdf();
+      if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
+      const nextUrl = URL.createObjectURL(blob);
+      setPdfPreviewUrl(nextUrl);
+      setPdfMeta(meta);
+      setBusy("");
+    } catch (error) {
+      setBusy("");
+      alert(error instanceof Error ? error.message : "Preview PDF impossible.");
+    }
+  }
+
+  async function downloadPdf() {
+    try {
+      setBusy("download-pdf");
+      const { blob, meta } = await requestPdf();
+      const href = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = href;
+      anchor.download = `${slugify(project.title)}-${project.id.slice(0, 8)}-kdp-interior.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(href);
+      setPdfMeta(meta);
+      setBusy("");
+    } catch (error) {
+      setBusy("");
+      alert(error instanceof Error ? error.message : "Telechargement PDF impossible.");
+    }
   }
 
   async function exportBundle() {
@@ -105,6 +184,8 @@ export function BookWorkspace({
     URL.revokeObjectURL(href);
   }
 
+  const suggestedPdfMeta = pdfMeta || getPdfPreviewMeta(project);
+
   return (
     <div className="space-y-4">
       <Tabs items={TAB_ITEMS} value={tab} onChange={(value) => setTab(value as BookProjectSectionKey)} />
@@ -117,10 +198,16 @@ export function BookWorkspace({
             <Field label="Public cible" value={project.audience} onChange={(value) => patch({ audience: value })} />
             <Field label="Objectif commercial" value={project.businessGoal} onChange={(value) => patch({ businessGoal: value })} />
           </div>
-          <div className="mt-5 grid gap-4 lg:grid-cols-3">
+          <div className="mt-5 grid gap-4 lg:grid-cols-4">
             <InfoCard label="Ton" value={project.tone} />
             <InfoCard label="Format" value={project.format} />
             <InfoCard label="Profondeur" value={project.depth} />
+            <InfoCard label="Modele IA" value={AI_MODEL_NAME} />
+          </div>
+          <div className="mt-5 grid gap-4 lg:grid-cols-3">
+            <InfoCard label="Objectif mots" value={String(goalWords)} />
+            <InfoCard label="Mots ecrits" value={String(actualWords)} />
+            <InfoCard label="Trim size PDF" value={project.paperback.trimSize} />
           </div>
           <div className="mt-5">
             <p className="text-sm font-medium text-ink">Progression globale</p>
@@ -152,7 +239,7 @@ export function BookWorkspace({
             <p className="text-sm font-medium text-ink">10 idees scorees</p>
             <div className="mt-3 grid gap-3">
               {project.ideas.map((idea) => (
-                <div key={idea.title} className="rounded-2xl bg-slate-50 p-4">
+                <div key={`${idea.title}-${idea.subtitle}`} className="rounded-2xl bg-slate-50 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <p className="font-medium text-ink">{idea.title}</p>
                     <Badge>{idea.score}/100</Badge>
@@ -177,7 +264,7 @@ export function BookWorkspace({
           }
         >
           <Textarea
-            rows={5}
+            rows={6}
             value={project.tableOfContents}
             onChange={(event) => patch({ tableOfContents: event.target.value })}
             placeholder="Table des matieres"
@@ -206,6 +293,10 @@ export function BookWorkspace({
 
       {tab === "chapters" ? (
         <SectionCard title="Redaction chapitre par chapitre">
+          <div className="mb-4 grid gap-4 lg:grid-cols-2">
+            <InfoCard label="Total mots ecrits" value={`${actualWords}`} />
+            <InfoCard label="Objectif total" value={`${goalWords}`} />
+          </div>
           <div className="space-y-4">
             {project.chapters.map((chapter) => (
               <ChapterEditor
@@ -368,25 +459,116 @@ export function BookWorkspace({
 
       {tab === "export" ? (
         <SectionCard
-          title="Export et checklist"
+          title="Export KDP interieur + bundle"
           actions={
-            <Button onClick={() => void exportBundle()} disabled={busy === "export"}>
-              <Download className="mr-2 h-4 w-4" />
-              {busy === "export" ? "Export..." : "Exporter le dossier"}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="secondary" onClick={() => void previewPdf()} disabled={busy === "preview-pdf"}>
+                <Eye className="mr-2 h-4 w-4" />
+                {busy === "preview-pdf" ? "Preview..." : "Previsualiser PDF KDP"}
+              </Button>
+              <Button variant="secondary" onClick={() => void downloadPdf()} disabled={busy === "download-pdf"}>
+                <FileText className="mr-2 h-4 w-4" />
+                {busy === "download-pdf" ? "PDF..." : "Telecharger PDF KDP"}
+              </Button>
+              <Button onClick={() => void exportBundle()} disabled={busy === "export"}>
+                <Download className="mr-2 h-4 w-4" />
+                {busy === "export" ? "Export..." : "Exporter le dossier"}
+              </Button>
+            </div>
           }
         >
-          <div className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
-            <div className="rounded-2xl bg-slate-50 p-4">
-              <p className="text-sm font-medium text-ink">Nom de dossier suggere</p>
-              <p className="mt-2 font-mono text-sm text-slate-600">
-                {slugify(project.title)}-{project.id.slice(0, 8)}
-              </p>
-              <p className="mt-4 text-sm text-slate-600">
-                Contenu prevu : `ZIP`, `Markdown`, `JSON`, `HTML`, `TXT`, `DOCX`, `CSV`, `packaging`, `brief couverture`, `checklist`.
-              </p>
+          <div className="grid gap-4 lg:grid-cols-[1fr_0.95fr]">
+            <div className="space-y-4">
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-sm font-medium text-ink">Reglages paperback</p>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <label className="space-y-2">
+                    <span className="text-sm text-slate-600">Trim size</span>
+                    <Select
+                      value={project.paperback.trimSize}
+                      onChange={(event) =>
+                        patch({
+                          paperback: {
+                            ...project.paperback,
+                            trimSize: event.target.value as TrimSize
+                          }
+                        })
+                      }
+                    >
+                      {TRIM_SIZES.map((item) => (
+                        <option key={item}>{item}</option>
+                      ))}
+                    </Select>
+                  </label>
+                  <label className="rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-700">
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={project.paperback.bleed}
+                        onChange={(event) =>
+                          patch({
+                            paperback: {
+                              ...project.paperback,
+                              bleed: event.target.checked
+                            }
+                          })
+                        }
+                      />
+                      Activer le bleed interieur
+                    </div>
+                  </label>
+                  <label className="rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-700 md:col-span-2">
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={project.paperback.pageNumbers}
+                        onChange={(event) =>
+                          patch({
+                            paperback: {
+                              ...project.paperback,
+                              pageNumbers: event.target.checked
+                            }
+                          })
+                        }
+                      />
+                      Afficher les numeros de page sur le PDF interieur
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-sm font-medium text-ink">Spec PDF KDP actuelle</p>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <InfoCard label="Trim size" value={suggestedPdfMeta.trimSize} />
+                  <InfoCard label="Pages estimees" value={String(suggestedPdfMeta.pageCount)} />
+                  <InfoCard label="Marge interieure" value={`${suggestedPdfMeta.insideMarginIn} in`} />
+                  <InfoCard label="Marge exterieure" value={`${suggestedPdfMeta.outsideMarginIn} in`} />
+                  <InfoCard label="Marge haute" value={`${suggestedPdfMeta.topMarginIn} in`} />
+                  <InfoCard label="Marge basse" value={`${suggestedPdfMeta.bottomMarginIn} in`} />
+                </div>
+                <p className="mt-4 text-sm text-slate-600">
+                  PDF interieur genere pour KDP. Le paperback demande toujours un fichier couverture separe en plus du PDF interieur.
+                </p>
+              </div>
+
+              {pdfPreviewUrl ? (
+                <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                  <p className="mb-3 text-sm font-medium text-ink">Preview PDF interieur</p>
+                  <iframe
+                    src={pdfPreviewUrl}
+                    className="h-[640px] w-full rounded-xl border border-slate-200"
+                    title="Preview PDF KDP"
+                  />
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">
+                  Lance "Previsualiser PDF KDP" pour verifier le rendu interieur avant export.
+                </div>
+              )}
             </div>
-            <div className="space-y-2">
+
+            <div className="space-y-3">
               {project.compliance.map((item) => (
                 <label key={item.id} className="flex gap-3 rounded-2xl border border-slate-200 bg-white p-3">
                   <input
@@ -408,17 +590,16 @@ export function BookWorkspace({
                   </div>
                 </label>
               ))}
+              <div className="rounded-2xl bg-ink p-4 text-sm text-slate-100">
+                <div className="flex items-center gap-2">
+                  <FileCheck2 className="h-4 w-4 text-amber-300" />
+                  Declaration IA KDP requise avant upload
+                </div>
+                <p className="mt-2 leading-7 text-slate-300">
+                  KDP demande de declarer le contenu AI-generated. Si l'IA a seulement aide a corriger ou brainstormer, cela reste AI-assisted et n'est pas a declarer.
+                </p>
+              </div>
             </div>
-          </div>
-          <div className="mt-5 rounded-2xl bg-ink p-4 text-sm text-slate-100">
-            <div className="flex items-center gap-2">
-              <FileCheck2 className="h-4 w-4 text-amber-300" />
-              Declaration IA KDP requise avant upload
-            </div>
-            <p className="mt-2 leading-7 text-slate-300">
-              Verifie si le contenu releve de `AI-generated` ou `AI-assisted`, puis
-              declare correctement cette information dans le formulaire KDP avant publication.
-            </p>
           </div>
         </SectionCard>
       ) : null}
@@ -480,13 +661,15 @@ function ChapterEditor({
   onGenerate: (kind: GenerationKind) => void;
   busy: string;
 }) {
+  const chapterProgress = Math.min(100, Math.round((chapter.wordCount / Math.max(1, chapter.targetWords)) * 100));
+
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h4 className="text-lg font-semibold text-ink">{chapter.title}</h4>
           <p className="mt-1 text-sm text-slate-500">
-            Objectif: {chapter.targetWords} mots • Actuel: {chapter.wordCount}
+            Objectif: {chapter.targetWords} mots • Actuel: {chapter.wordCount} mots • {chapterProgress}%
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -508,9 +691,12 @@ function ChapterEditor({
           ))}
         </div>
       </div>
+      <div className="mt-4">
+        <Progress value={chapterProgress} />
+      </div>
       <Textarea
         className="mt-4"
-        rows={12}
+        rows={18}
         value={chapter.content}
         onChange={(event) =>
           onChange({
@@ -573,6 +759,10 @@ function applyGeneratedPayload(
       wordCount: (data.manuscript?.[index] ?? chapter.content).split(/\s+/).filter(Boolean).length
     }));
   }
+
+  if (kind === "outline") next.status = "Plan";
+  if (kind === "chapter" || kind === "develop" || kind === "simplify" || kind === "examples") next.status = "Redaction";
+  if (kind === "correction" || kind === "rewriteHuman") next.status = "Correction";
 
   next.progress = estimateProgress(next);
   next.updatedAt = new Date().toISOString();

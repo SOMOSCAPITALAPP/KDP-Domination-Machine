@@ -1,9 +1,12 @@
+import { AI_MODEL_NAME } from "@/lib/constants";
 import type { BookProject } from "@/lib/types";
-import { formatChapterMarkdown, slugify } from "@/lib/utils";
+import { formatChapterMarkdown, getPdfPreviewMeta, getTotalWordCount, slugify } from "@/lib/utils";
 
 export function exportProjectBundle(project: BookProject) {
   const folderName = `${slugify(project.title)}-${project.id.slice(0, 8)}`;
+  const pdfMeta = getPdfPreviewMeta(project);
   const coverBrief = project.packaging.coverBrief || "";
+
   const markdown = [
     `# ${project.title}`,
     "",
@@ -76,6 +79,25 @@ export function exportProjectBundle(project: BookProject) {
     )
   ].join("\n");
 
+  const uploadNotes = [
+    "# KDP upload notes",
+    "",
+    `Modele IA verrouille: ${AI_MODEL_NAME}`,
+    `Trim size interieur: ${pdfMeta.trimSize}`,
+    `Bleed: ${pdfMeta.bleed ? "oui" : "non"}`,
+    `Page numbers: ${project.paperback.pageNumbers ? "oui" : "non"}`,
+    `Pages estimees pour le PDF interieur: ${pdfMeta.pageCount}`,
+    `Marge interieure: ${pdfMeta.insideMarginIn} in`,
+    `Marge exterieure: ${pdfMeta.outsideMarginIn} in`,
+    `Marge haute: ${pdfMeta.topMarginIn} in`,
+    `Marge basse: ${pdfMeta.bottomMarginIn} in`,
+    "",
+    "Verification KDP:",
+    "- Le paperback demande un fichier interieur PDF et un fichier couverture separe.",
+    "- Les contenus AI-generated doivent etre declares a la publication KDP.",
+    "- Les images de couverture et interieures doivent rester en haute resolution, idealement 300 DPI."
+  ].join("\n");
+
   const csvRows = [
     [
       "project_id",
@@ -90,7 +112,9 @@ export function exportProjectBundle(project: BookProject) {
       "depth",
       "commercial_score",
       "chapter_count",
-      "total_words"
+      "total_words",
+      "trim_size",
+      "bleed"
     ],
     [
       project.id,
@@ -105,7 +129,9 @@ export function exportProjectBundle(project: BookProject) {
       project.depth,
       String(project.commercialScore),
       String(project.chapters.length),
-      String(project.chapters.reduce((sum, chapter) => sum + chapter.wordCount, 0))
+      String(getTotalWordCount(project)),
+      project.paperback.trimSize,
+      project.paperback.bleed ? "yes" : "no"
     ],
     [],
     [
@@ -114,7 +140,8 @@ export function exportProjectBundle(project: BookProject) {
       "target_words",
       "word_count",
       "summary",
-      "learning_goal"
+      "learning_goal",
+      "emotional_shift"
     ],
     ...project.chapters.map((chapter) => [
       chapter.id,
@@ -122,7 +149,8 @@ export function exportProjectBundle(project: BookProject) {
       String(chapter.targetWords),
       String(chapter.wordCount),
       escapeCsv(chapter.summary),
-      escapeCsv(chapter.learningGoal)
+      escapeCsv(chapter.learningGoal),
+      escapeCsv(chapter.emotionalShift)
     ])
   ]
     .map((row) => row.join(","))
@@ -138,10 +166,12 @@ export function exportProjectBundle(project: BookProject) {
     packaging,
     coverBrief,
     checklist,
+    uploadNotes,
     readme: [
       "KDP Domination Machine bundle",
       `Projet: ${project.title}`,
-      "Fichiers inclus: manuscript.md, manuscript.html, manuscript.txt, project.json, manuscript.docx, project-sheet.csv, packaging.md, cover-brief.md, checklist-kdp.md, README.txt"
+      `Modele IA: ${AI_MODEL_NAME}`,
+      "Fichiers inclus: manuscript.md, manuscript.html, manuscript.txt, manuscript.docx, manuscript-kdp.pdf, project.json, project-sheet.csv, packaging.md, cover-brief.md, checklist-kdp.md, kdp-upload-notes.md, README.txt"
     ].join("\n")
   };
 }

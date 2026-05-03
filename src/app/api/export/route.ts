@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import JSZip from "jszip";
 import { buildProjectDocx } from "@/lib/docx";
 import { exportProjectBundle } from "@/lib/exporters";
+import { buildProjectPdf } from "@/lib/pdf";
 import type { BookProject } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -17,6 +18,7 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as { project: BookProject };
     const bundle = exportProjectBundle(body.project);
+    const pdf = await buildProjectPdf(body.project);
     const archive = new JSZip();
     const root = archive.folder(bundle.folderName);
 
@@ -33,7 +35,9 @@ export async function POST(request: Request) {
     root.file("cover-brief.md", asText(bundle.coverBrief));
     root.file("packaging.md", asText(bundle.packaging));
     root.file("checklist-kdp.md", asText(bundle.checklist));
+    root.file("kdp-upload-notes.md", asText(bundle.uploadNotes));
     root.file("manuscript.docx", await buildProjectDocx(body.project));
+    root.file("manuscript-kdp.pdf", pdf.bytes);
 
     const zipBuffer = await archive.generateAsync({ type: "nodebuffer" });
 
