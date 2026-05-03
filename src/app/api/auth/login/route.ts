@@ -5,8 +5,11 @@ export async function POST(request: Request) {
 
   if (!process.env.ADMIN_PASSWORD) {
     return NextResponse.json(
-      { error: "ADMIN_PASSWORD n'est pas configuré." },
-      { status: 500 }
+      {
+        error:
+          "ADMIN_PASSWORD n'est pas encore configure sur l'environnement de deploiement."
+      },
+      { status: 503 }
     );
   }
 
@@ -25,4 +28,3 @@ export async function POST(request: Request) {
 
   return response;
 }
-
