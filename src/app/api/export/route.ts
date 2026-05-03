@@ -1,66 +1,51 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import { spawn } from "node:child_process";
 import { NextResponse } from "next/server";
+import JSZip from "jszip";
+import { buildProjectDocx } from "@/lib/docx";
 import { exportProjectBundle } from "@/lib/exporters";
 import type { BookProject } from "@/lib/types";
 
-const PYTHON =
-  "C:\\Users\\olivo\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe";
+export const runtime = "nodejs";
 
-function runDocxScript(jsonPath: string, docxPath: string) {
-  return new Promise<void>((resolve, reject) => {
-    const child = spawn(PYTHON, ["scripts/export_docx.py", jsonPath, docxPath], {
-      cwd: process.cwd()
-    });
-
-    let stderr = "";
-    child.stderr.on("data", (data) => {
-      stderr += data.toString();
-    });
-    child.on("close", (code) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-      reject(new Error(stderr || "Échec de génération DOCX."));
-    });
-  });
+function asText(value: unknown) {
+  if (typeof value === "string") return value;
+  if (value == null) return "";
+  if (typeof value === "object") return JSON.stringify(value, null, 2);
+  return String(value);
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as { project: BookProject };
-  const bundle = exportProjectBundle(body.project);
-  const root = join(process.cwd(), "exports", bundle.folderName);
-  await mkdir(root, { recursive: true });
-
-  const jsonPath = join(root, "project.json");
-  const docxPath = join(root, "manuscript.docx");
-
-  await Promise.all([
-    writeFile(join(root, "README.txt"), bundle.readme, "utf8"),
-    writeFile(jsonPath, bundle.json, "utf8"),
-    writeFile(join(root, "manuscript.md"), bundle.markdown, "utf8"),
-    writeFile(join(root, "manuscript.html"), bundle.html, "utf8"),
-    writeFile(join(root, "manuscript.txt"), bundle.text, "utf8"),
-    writeFile(join(root, "project-sheet.csv"), bundle.csv, "utf8"),
-    writeFile(join(root, "cover-brief.md"), bundle.coverBrief, "utf8"),
-    writeFile(join(root, "packaging.md"), bundle.packaging, "utf8"),
-    writeFile(join(root, "checklist-kdp.md"), bundle.checklist, "utf8")
-  ]);
-
   try {
-    await runDocxScript(jsonPath, docxPath);
-  } catch (error) {
-    await writeFile(
-      join(root, "DOCX-ERROR.txt"),
-      error instanceof Error ? error.message : "DOCX non généré.",
-      "utf8"
-    );
-  }
+    const body = (await request.json()) as { project: BookProject };
+    const bundle = exportProjectBundle(body.project);
+    const archive = new JSZip();
+    const root = archive.folder(bundle.folderName);
 
-  return NextResponse.json({
-    ok: true,
-    folder: root
-  });
+    if (!root) {
+      throw new Error("Impossible de preparer le dossier d'export.");
+    }
+
+    root.file("README.txt", asText(bundle.readme));
+    root.file("project.json", asText(bundle.json));
+    root.file("manuscript.md", asText(bundle.markdown));
+    root.file("manuscript.html", asText(bundle.html));
+    root.file("manuscript.txt", asText(bundle.text));
+    root.file("project-sheet.csv", asText(bundle.csv));
+    root.file("cover-brief.md", asText(bundle.coverBrief));
+    root.file("packaging.md", asText(bundle.packaging));
+    root.file("checklist-kdp.md", asText(bundle.checklist));
+    root.file("manuscript.docx", await buildProjectDocx(body.project));
+
+    const zipBuffer = await archive.generateAsync({ type: "nodebuffer" });
+
+    return new NextResponse(new Uint8Array(zipBuffer), {
+      headers: {
+        "Content-Type": "application/zip",
+        "Content-Disposition": `attachment; filename="${bundle.folderName}.zip"`,
+        "Cache-Control": "no-store"
+      }
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Export impossible.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }

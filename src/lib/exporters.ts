@@ -3,16 +3,20 @@ import { formatChapterMarkdown, slugify } from "@/lib/utils";
 
 export function exportProjectBundle(project: BookProject) {
   const folderName = `${slugify(project.title)}-${project.id.slice(0, 8)}`;
+  const coverBrief = project.packaging.coverBrief || "";
   const markdown = [
     `# ${project.title}`,
     "",
-    `## Sous-titre`,
+    "## Sous-titre",
     project.packaging.seoSubtitle || project.promise,
     "",
-    `## Promesse`,
+    "## Promesse",
     project.promise,
     "",
-    `## Table des matières`,
+    "## Risques de concurrence",
+    project.competitionRisks,
+    "",
+    "## Table des matieres",
     project.tableOfContents,
     "",
     ...project.chapters.map((chapter) => formatChapterMarkdown(chapter))
@@ -28,7 +32,14 @@ export function exportProjectBundle(project: BookProject) {
     })
     .join("")}</body></html>`;
 
-  const text = [project.title, project.promise, project.tableOfContents, ...project.chapters.map((chapter) => chapter.content)].join("\n\n");
+  const text = [
+    project.title,
+    project.promise,
+    project.competitionRisks,
+    project.tableOfContents,
+    ...project.chapters.map((chapter) => chapter.content)
+  ].join("\n\n");
+
   const packaging = [
     "# Packaging KDP",
     "",
@@ -38,18 +49,30 @@ export function exportProjectBundle(project: BookProject) {
     "## Bullet points",
     ...project.packaging.bullets.map((item) => `- ${item}`),
     "",
-    "## Mots-clés",
+    "## Mots-cles",
     project.packaging.keywords.join(", "),
     "",
-    "## Catégories",
-    project.packaging.categories.join(", ")
+    "## Categories",
+    project.packaging.categories.join(", "),
+    "",
+    "## SEO Title",
+    project.packaging.seoTitle,
+    "",
+    "## SEO Subtitle",
+    project.packaging.seoSubtitle,
+    "",
+    "## Bio auteur",
+    project.packaging.authorBio,
+    "",
+    "## Phrase d'accroche couverture",
+    project.packaging.coverHook
   ].join("\n");
 
   const checklist = [
     "# Checklist KDP",
     "",
     ...project.compliance.map(
-      (item) => `- [${item.checked ? "x" : " "}] ${item.label} — ${item.note}`
+      (item) => `- [${item.checked ? "x" : " "}] ${item.label} - ${item.note}`
     )
   ].join("\n");
 
@@ -113,12 +136,12 @@ export function exportProjectBundle(project: BookProject) {
     text,
     csv: csvRows,
     packaging,
-    coverBrief: project.packaging.coverBrief,
+    coverBrief,
     checklist,
     readme: [
       "KDP Domination Machine bundle",
       `Projet: ${project.title}`,
-      "Fichiers inclus: manuscript.md, manuscript.html, manuscript.txt, project.json, manuscript.docx, project-sheet.csv, packaging.md, cover-brief.md, checklist-kdp.md"
+      "Fichiers inclus: manuscript.md, manuscript.html, manuscript.txt, project.json, manuscript.docx, project-sheet.csv, packaging.md, cover-brief.md, checklist-kdp.md, README.txt"
     ].join("\n")
   };
 }

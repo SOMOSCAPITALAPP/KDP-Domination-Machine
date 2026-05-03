@@ -59,11 +59,23 @@ export async function generateBookAsset({
           : kind === "rewriteHuman"
             ? rewriteHumanPrompt(project)
             : kind === "develop"
-              ? chapterPrompt(project, chapter?.title ?? "Chapitre", "Développe davantage avec profondeur, détails et transitions.")
+              ? chapterPrompt(
+                  project,
+                  chapter?.title ?? "Chapitre",
+                  "Developpe davantage avec profondeur, details et transitions."
+                )
               : kind === "simplify"
-                ? chapterPrompt(project, chapter?.title ?? "Chapitre", "Simplifie le langage et rends le chapitre plus digeste.")
+                ? chapterPrompt(
+                    project,
+                    chapter?.title ?? "Chapitre",
+                    "Simplifie le langage et rends le chapitre plus digeste."
+                  )
                 : kind === "examples"
-                  ? chapterPrompt(project, chapter?.title ?? "Chapitre", "Ajoute des exemples concrets, situations et mini études de cas.")
+                  ? chapterPrompt(
+                      project,
+                      chapter?.title ?? "Chapitre",
+                      "Ajoute des exemples concrets, situations et mini etudes de cas."
+                    )
                   : kind === "correction"
                     ? correctionPrompt(project)
                     : kind === "packaging"
@@ -95,17 +107,19 @@ function fallbackGeneration({
   if (kind === "concept") {
     return {
       commercialScore: Math.min(95, project.commercialScore + 8),
-      promise: `Aider ${project.audience || "le lecteur"} à obtenir un résultat concret dans la niche ${project.niche}.`,
-      readerAvatar: `${project.audience || "Lecteur ciblé"} qui veut une transformation rapide mais crédible.`,
-      painPoint: `Le lecteur se sent bloqué dans ${project.niche} et cherche un cadre clair.`,
-      finalBenefit: "Un résultat visible, applicable et rassurant.",
-      differentiator: `Approche ${project.tone} avec structure orientée action et lisibilité Amazon.`,
-      amazonPositioning: `Livre ${project.type} à promesse claire pour la niche ${project.niche}.`,
+      promise: `Aider ${project.audience || "le lecteur"} a obtenir un resultat concret dans la niche ${project.niche}.`,
+      readerAvatar: `${project.audience || "Lecteur cible"} qui veut une transformation rapide mais credible.`,
+      painPoint: `Le lecteur se sent bloque dans ${project.niche} et cherche un cadre clair.`,
+      finalBenefit: "Un resultat visible, applicable et rassurant.",
+      differentiator: `Approche ${project.tone} avec structure orientee action et lisibilite Amazon.`,
+      competitionRisks:
+        "Marche potentiellement concurrentiel si la promesse reste trop generique ou trop proche des leaders de niche.",
+      amazonPositioning: `Livre ${project.type} a promesse claire pour la niche ${project.niche}.`,
       ideas: Array.from({ length: 10 }, (_, index) => ({
-        title: `${project.niche || "Niche"} - idée ${index + 1}`,
-        subtitle: `Sous-titre orienté résultat ${index + 1}`,
+        title: `${project.niche || "Niche"} - idee ${index + 1}`,
+        subtitle: `Sous-titre oriente resultat ${index + 1}`,
         score: 70 + index,
-        angle: `Angle différenciant ${index + 1} pour ${project.audience || "ce public"}.`
+        angle: `Angle differenciant ${index + 1} pour ${project.audience || "ce public"}.`
       }))
     };
   }
@@ -114,10 +128,10 @@ function fallbackGeneration({
     const chapters = project.chapters.map((item, index) => ({
       ...item,
       id: item.id || uid("chapter"),
-      title: `${index + 1}. ${project.niche || "Sujet"} - étape ${index + 1}`,
-      summary: `Ce chapitre fait progresser le lecteur sur l'étape ${index + 1}.`,
+      title: `${index + 1}. ${project.niche || "Sujet"} - etape ${index + 1}`,
+      summary: `Ce chapitre fait progresser le lecteur sur l'etape ${index + 1}.`,
       learningGoal: "Faire comprendre un principe puis le transformer en action.",
-      emotionalShift: "Du doute vers la clarté."
+      emotionalShift: "Du doute vers la clarte."
     }));
     return {
       tableOfContents: chapters.map((item) => item.title).join("\n"),
@@ -130,17 +144,17 @@ function fallbackGeneration({
       chapterContent: [
         `${chapter?.title ?? "Chapitre"}`,
         "",
-        `Le lecteur avance ici dans la promesse centrale du livre : ${project.promise || "obtenir un résultat concret"}.`,
+        `Le lecteur avance ici dans la promesse centrale du livre : ${project.promise || "obtenir un resultat concret"}.`,
         "",
-        "Cette section combine explications, exemples simples et transitions orientées action.",
+        "Cette section combine explications, exemples simples et transitions orientees action.",
         "",
         kind === "develop"
-          ? "Version développée avec plus de profondeur, plus de contexte et une meilleure densité pédagogique."
+          ? "Version developpee avec plus de profondeur, plus de contexte et une meilleure densite pedagogique."
           : kind === "simplify"
-            ? "Version simplifiée avec un langage plus direct et des phrases plus courtes."
+            ? "Version simplifiee avec un langage plus direct et des phrases plus courtes."
             : kind === "examples"
-              ? "Version enrichie avec des exemples terrain, une situation type et une application immédiate."
-              : "Version de base du chapitre, prête à être retravaillée."
+              ? "Version enrichie avec des exemples terrain, une situation type et une application immediate."
+              : "Version de base du chapitre, prete a etre retravaillee."
       ].join("\n")
     };
   }
@@ -149,7 +163,7 @@ function fallbackGeneration({
     return {
       manuscript: project.chapters.map(
         (item) =>
-          `${item.content}\n\nVoix retravaillée: phrases plus naturelles, transitions plus humaines, moins de rigidité.`
+          `${item.content}\n\nVoix retravaillee: phrases plus naturelles, transitions plus humaines, moins de rigidite.`
       )
     };
   }
@@ -157,10 +171,10 @@ function fallbackGeneration({
   if (kind === "correction") {
     return {
       correctionNotes:
-        "Correction V1: alléger certaines répétitions, varier les ouvertures de paragraphes, renforcer les transitions entre chapitres.",
+        "Correction V1: alleger certaines repetitions, varier les ouvertures de paragraphes, renforcer les transitions entre chapitres.",
       alerts: [
-        "Vérifier toute promesse absolue liée à la santé, à la finance ou au droit.",
-        "Relire la cohérence du niveau de ton entre introduction et conclusion."
+        "Verifier toute promesse absolue liee a la sante, a la finance ou au droit.",
+        "Relire la coherence du niveau de ton entre introduction et conclusion."
       ]
     };
   }
@@ -169,22 +183,22 @@ function fallbackGeneration({
     return {
       packaging: {
         amazonDescription:
-          "<p>Un guide clair et concret pour aider le lecteur à passer de la confusion à l'action dans un cadre simple, crédible et structuré.</p>",
+          "<p>Un guide clair et concret pour aider le lecteur a passer de la confusion a l'action dans un cadre simple, credible et structure.</p>",
         bullets: [
-          "Promesse claire et orientée transformation",
-          "Structure rapide à lire et à appliquer",
-          "Chapitrage pensé pour la progression",
-          "Ton crédible sans jargon inutile",
+          "Promesse claire et orientee transformation",
+          "Structure rapide a lire et a appliquer",
+          "Chapitrage pense pour la progression",
+          "Ton credible sans jargon inutile",
           "Exemples concrets et utilisables",
           "Approche premium mais accessible",
-          "Parfait pour une audience Amazon ciblée"
+          "Parfait pour une audience Amazon ciblee"
         ],
         categories: ["Business & Money", "Self-Help"],
         seoTitle: project.title,
-        seoSubtitle: project.promise || "Sous-titre optimisé",
+        seoSubtitle: project.promise || "Sous-titre optimise",
         authorBio:
-          "Auteur orienté résultats, spécialisé dans la simplification d'idées complexes en livres utiles et actionnables.",
-        coverHook: "Un résultat concret, une méthode claire, une vraie transformation."
+          "Auteur oriente resultats, specialise dans la simplification d'idees complexes en livres utiles et actionnables.",
+        coverHook: "Un resultat concret, une methode claire, une vraie transformation."
       }
     };
   }
@@ -208,9 +222,9 @@ function fallbackGeneration({
   if (kind === "coverBrief") {
     return {
       packaging: {
-        coverHook: "Clarté immédiate. Résultat visible. Promesse crédible.",
+        coverHook: "Clarte immediate. Resultat visible. Promesse credible.",
         coverBrief:
-          "Créer une couverture premium, lisible en miniature, avec un titre fort, peu d'éléments, hiérarchie nette, palette chaude et crédible, aucune surcharge visuelle."
+          "Creer une couverture premium, lisible en miniature, avec un titre fort, peu d'elements, hierarchie nette, palette chaude et credible, aucune surcharge visuelle."
       }
     };
   }
@@ -218,9 +232,8 @@ function fallbackGeneration({
   return {
     compliance: initialCompliance(),
     alerts: [
-      "Déclarer le contenu AI-generated ou AI-assisted selon l'usage réel.",
-      "Préparer un fichier intérieur séparé du fichier couverture paperback."
+      "Declarer le contenu AI-generated ou AI-assisted selon l'usage reel.",
+      "Preparer un fichier interieur separe du fichier couverture paperback."
     ]
   };
 }
-

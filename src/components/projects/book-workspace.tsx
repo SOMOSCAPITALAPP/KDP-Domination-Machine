@@ -20,10 +20,10 @@ import type {
 } from "@/lib/types";
 
 const TAB_ITEMS: { id: BookProjectSectionKey; label: string }[] = [
-  { id: "overview", label: "Vue d’ensemble" },
+  { id: "overview", label: "Vue d'ensemble" },
   { id: "concept", label: "Concept Best-Seller" },
   { id: "outline", label: "Plan du livre" },
-  { id: "chapters", label: "Rédaction" },
+  { id: "chapters", label: "Redaction" },
   { id: "correction", label: "Correction" },
   { id: "packaging", label: "Packaging KDP" },
   { id: "export", label: "Export" }
@@ -70,7 +70,7 @@ export function BookWorkspace({
     const data = (await response.json()) as GeneratedPayload & { error?: string };
     setBusy("");
     if (!response.ok || data.error) {
-      alert(data.error ?? "Génération impossible.");
+      alert(data.error ?? "Generation impossible.");
       return;
     }
 
@@ -85,13 +85,24 @@ export function BookWorkspace({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ project })
     });
-    const data = (await response.json()) as { folder?: string; error?: string };
-    setBusy("");
+
     if (!response.ok) {
+      const data = (await response.json()) as { error?: string };
+      setBusy("");
       alert(data.error ?? "Export impossible.");
       return;
     }
-    alert(`Bundle exporté dans : ${data.folder}`);
+
+    const blob = await response.blob();
+    setBusy("");
+    const href = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = href;
+    anchor.download = `${slugify(project.title)}-${project.id.slice(0, 8)}.zip`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(href);
   }
 
   return (
@@ -124,20 +135,21 @@ export function BookWorkspace({
           actions={
             <Button onClick={() => void generate("concept")} disabled={busy === "concept"}>
               <Sparkles className="mr-2 h-4 w-4" />
-              {busy === "concept" ? "Génération..." : "Générer le concept"}
+              {busy === "concept" ? "Generation..." : "Generer le concept"}
             </Button>
           }
         >
           <div className="grid gap-4 lg:grid-cols-2">
             <TextareaBlock label="Promesse" value={project.promise} onChange={(value) => patch({ promise: value })} />
             <TextareaBlock label="Avatar lecteur" value={project.readerAvatar} onChange={(value) => patch({ readerAvatar: value })} />
-            <TextareaBlock label="Problème douloureux" value={project.painPoint} onChange={(value) => patch({ painPoint: value })} />
-            <TextareaBlock label="Bénéfice final" value={project.finalBenefit} onChange={(value) => patch({ finalBenefit: value })} />
-            <TextareaBlock label="Angle différenciant" value={project.differentiator} onChange={(value) => patch({ differentiator: value })} />
+            <TextareaBlock label="Probleme douloureux" value={project.painPoint} onChange={(value) => patch({ painPoint: value })} />
+            <TextareaBlock label="Benefice final" value={project.finalBenefit} onChange={(value) => patch({ finalBenefit: value })} />
+            <TextareaBlock label="Angle differenciant" value={project.differentiator} onChange={(value) => patch({ differentiator: value })} />
+            <TextareaBlock label="Risques de concurrence" value={project.competitionRisks} onChange={(value) => patch({ competitionRisks: value })} />
             <TextareaBlock label="Positionnement Amazon" value={project.amazonPositioning} onChange={(value) => patch({ amazonPositioning: value })} />
           </div>
           <div className="mt-5">
-            <p className="text-sm font-medium text-ink">10 idées scorées</p>
+            <p className="text-sm font-medium text-ink">10 idees scorees</p>
             <div className="mt-3 grid gap-3">
               {project.ideas.map((idea) => (
                 <div key={idea.title} className="rounded-2xl bg-slate-50 p-4">
@@ -145,6 +157,7 @@ export function BookWorkspace({
                     <p className="font-medium text-ink">{idea.title}</p>
                     <Badge>{idea.score}/100</Badge>
                   </div>
+                  <p className="mt-1 text-xs text-slate-500">{idea.subtitle}</p>
                   <p className="mt-2 text-sm text-slate-600">{idea.angle}</p>
                 </div>
               ))}
@@ -159,7 +172,7 @@ export function BookWorkspace({
           actions={
             <Button onClick={() => void generate("outline")} disabled={busy === "outline"}>
               <Sparkles className="mr-2 h-4 w-4" />
-              {busy === "outline" ? "Génération..." : "Générer le plan"}
+              {busy === "outline" ? "Generation..." : "Generer le plan"}
             </Button>
           }
         >
@@ -167,7 +180,7 @@ export function BookWorkspace({
             rows={5}
             value={project.tableOfContents}
             onChange={(event) => patch({ tableOfContents: event.target.value })}
-            placeholder="Table des matières"
+            placeholder="Table des matieres"
           />
           <div className="mt-5 space-y-3">
             {project.chapters.map((chapter) => (
@@ -178,9 +191,13 @@ export function BookWorkspace({
                 </div>
                 <p className="mt-2 text-sm text-slate-600">{chapter.summary}</p>
                 <p className="mt-2 text-xs uppercase tracking-[0.2em] text-slate-500">
-                  Objectif pédagogique
+                  Objectif pedagogique
                 </p>
                 <p className="text-sm text-slate-600">{chapter.learningGoal}</p>
+                <p className="mt-2 text-xs uppercase tracking-[0.2em] text-slate-500">
+                  Progression emotionnelle
+                </p>
+                <p className="text-sm text-slate-600">{chapter.emotionalShift}</p>
               </div>
             ))}
           </div>
@@ -188,7 +205,7 @@ export function BookWorkspace({
       ) : null}
 
       {tab === "chapters" ? (
-        <SectionCard title="Rédaction chapitre par chapitre">
+        <SectionCard title="Redaction chapitre par chapitre">
           <div className="space-y-4">
             {project.chapters.map((chapter) => (
               <ChapterEditor
@@ -211,13 +228,13 @@ export function BookWorkspace({
 
       {tab === "correction" ? (
         <SectionCard
-          title="Correction & humanisation"
+          title="Correction et humanisation"
           actions={
             <div className="flex flex-wrap gap-2">
               {[
                 ["correction", "Corriger"],
                 ["rewriteHuman", "Rendre plus humain"],
-                ["compliance", "Vérifier conformité"]
+                ["compliance", "Verifier conformite"]
               ].map(([kind, label]) => (
                 <Button
                   key={kind}
@@ -253,8 +270,8 @@ export function BookWorkspace({
           actions={
             <div className="flex flex-wrap gap-2">
               {[
-                ["packaging", "Générer packaging"],
-                ["keywords", "Générer mots-clés"],
+                ["packaging", "Generer packaging"],
+                ["keywords", "Generer mots-cles"],
                 ["coverBrief", "Brief couverture"]
               ].map(([kind, label]) => (
                 <Button
@@ -287,7 +304,7 @@ export function BookWorkspace({
               }
             />
             <TextareaBlock
-              label="Mots-clés backend"
+              label="Mots-cles backend"
               value={project.packaging.keywords.join(", ")}
               onChange={(value) =>
                 patch({
@@ -296,6 +313,46 @@ export function BookWorkspace({
                     keywords: value.split(",").map((item) => item.trim()).filter(Boolean)
                   }
                 })
+              }
+            />
+            <TextareaBlock
+              label="Categories proposees"
+              value={project.packaging.categories.join("\n")}
+              onChange={(value) =>
+                patch({
+                  packaging: {
+                    ...project.packaging,
+                    categories: value.split("\n").map((item) => item.trim()).filter(Boolean)
+                  }
+                })
+              }
+            />
+            <TextareaBlock
+              label="Titre optimise SEO"
+              value={project.packaging.seoTitle}
+              onChange={(value) =>
+                patch({ packaging: { ...project.packaging, seoTitle: value } })
+              }
+            />
+            <TextareaBlock
+              label="Sous-titre optimise SEO"
+              value={project.packaging.seoSubtitle}
+              onChange={(value) =>
+                patch({ packaging: { ...project.packaging, seoSubtitle: value } })
+              }
+            />
+            <TextareaBlock
+              label="Bio auteur adaptee"
+              value={project.packaging.authorBio}
+              onChange={(value) =>
+                patch({ packaging: { ...project.packaging, authorBio: value } })
+              }
+            />
+            <TextareaBlock
+              label="Phrase d'accroche couverture"
+              value={project.packaging.coverHook}
+              onChange={(value) =>
+                patch({ packaging: { ...project.packaging, coverHook: value } })
               }
             />
             <TextareaBlock
@@ -321,12 +378,12 @@ export function BookWorkspace({
         >
           <div className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
             <div className="rounded-2xl bg-slate-50 p-4">
-              <p className="text-sm font-medium text-ink">Nom de dossier suggéré</p>
+              <p className="text-sm font-medium text-ink">Nom de dossier suggere</p>
               <p className="mt-2 font-mono text-sm text-slate-600">
                 {slugify(project.title)}-{project.id.slice(0, 8)}
               </p>
               <p className="mt-4 text-sm text-slate-600">
-                Contenu prévu : `Markdown`, `JSON`, `HTML`, `TXT`, `DOCX`, `CSV`, `packaging`, `brief couverture`, `checklist`.
+                Contenu prevu : `ZIP`, `Markdown`, `JSON`, `HTML`, `TXT`, `DOCX`, `CSV`, `packaging`, `brief couverture`, `checklist`.
               </p>
             </div>
             <div className="space-y-2">
@@ -356,11 +413,11 @@ export function BookWorkspace({
           <div className="mt-5 rounded-2xl bg-ink p-4 text-sm text-slate-100">
             <div className="flex items-center gap-2">
               <FileCheck2 className="h-4 w-4 text-amber-300" />
-              Déclaration IA KDP requise avant upload
+              Declaration IA KDP requise avant upload
             </div>
             <p className="mt-2 leading-7 text-slate-300">
-              Vérifie si le contenu relève de `AI-generated` ou `AI-assisted`, puis
-              déclare correctement cette information dans le formulaire KDP avant publication.
+              Verifie si le contenu releve de `AI-generated` ou `AI-assisted`, puis
+              declare correctement cette information dans le formulaire KDP avant publication.
             </p>
           </div>
         </SectionCard>
@@ -434,9 +491,9 @@ function ChapterEditor({
         </div>
         <div className="flex flex-wrap gap-2">
           {[
-            ["chapter", "Générer chapitre"],
-            ["rewriteHuman", "Réécrire plus humain"],
-            ["develop", "Développer"],
+            ["chapter", "Generer chapitre"],
+            ["rewriteHuman", "Reecrire plus humain"],
+            ["develop", "Developper"],
             ["simplify", "Simplifier"],
             ["examples", "Ajouter exemples"]
           ].map(([kind, label]) => (
@@ -482,6 +539,7 @@ function applyGeneratedPayload(
   if (data.painPoint) next.painPoint = data.painPoint;
   if (data.finalBenefit) next.finalBenefit = data.finalBenefit;
   if (data.differentiator) next.differentiator = data.differentiator;
+  if (data.competitionRisks) next.competitionRisks = data.competitionRisks;
   if (data.amazonPositioning) next.amazonPositioning = data.amazonPositioning;
   if (data.tableOfContents) next.tableOfContents = data.tableOfContents;
   if (data.chapters) next.chapters = data.chapters;

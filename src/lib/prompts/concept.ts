@@ -1,7 +1,7 @@
 import type { BookProject } from "@/lib/types";
 
 export function conceptPrompt(project: BookProject) {
-  return `Tu es un stratège Amazon KDP.
+  return `Tu es un stratege Amazon KDP.
 Projet: ${project.title}
 Niche: ${project.niche}
 Public: ${project.audience}
@@ -11,13 +11,13 @@ Ton: ${project.tone}
 Objectif: ${project.businessGoal}
 
 Retourne du JSON avec:
-- ideas: 10 idées avec title, subtitle, score, angle
+- ideas: 10 idees avec title, subtitle, score, angle
 - commercialScore
 - promise
 - readerAvatar
 - painPoint
 - finalBenefit
 - differentiator
+- competitionRisks
 - amazonPositioning`;
 }
-

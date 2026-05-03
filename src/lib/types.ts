@@ -121,6 +121,7 @@ export type GeneratedPayload = Partial<{
   painPoint: string;
   finalBenefit: string;
   differentiator: string;
+  competitionRisks: string;
   amazonPositioning: string;
   tableOfContents: string;
   chapters: Chapter[];
@@ -140,4 +141,3 @@ export type BookProjectSectionKey =
   | "correction"
   | "packaging"
   | "export";
-
