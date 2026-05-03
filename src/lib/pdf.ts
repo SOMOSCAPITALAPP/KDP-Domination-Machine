@@ -1,8 +1,64 @@
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, PDFFont, StandardFonts, rgb } from "pdf-lib";
 import type { BookProject } from "@/lib/types";
 import { getKdpMarginPreset, getPdfPreviewMeta, getTrimSizeDimensions } from "@/lib/utils";
 
 const POINTS_PER_INCH = 72;
+const PDF_CHAR_REPLACEMENTS: Record<string, string> = {
+  "\u00A0": " ",
+  "\u2007": " ",
+  "\u202F": " ",
+  "\u200B": "",
+  "\u200C": "",
+  "\u200D": "",
+  "\u2060": "",
+  "\u2010": "-",
+  "\u2011": "-",
+  "\u2012": "-",
+  "\u2013": "-",
+  "\u2014": "-",
+  "\u2015": "-",
+  "\u2212": "-",
+  "\u2026": "...",
+  "\u2018": "'",
+  "\u2019": "'",
+  "\u201A": ",",
+  "\u201B": "'",
+  "\u201C": "\"",
+  "\u201D": "\"",
+  "\u201E": "\"",
+  "\u00AB": "\"",
+  "\u00BB": "\"",
+  "\u2022": "-",
+  "\u00B7": "-",
+  "\u2023": "-",
+  "\u2043": "-",
+  "\u2219": "-",
+  "\u00B9": "1",
+  "\u00B2": "2",
+  "\u00B3": "3",
+  "\u2070": "0",
+  "\u2071": "i",
+  "\u2074": "4",
+  "\u2075": "5",
+  "\u2076": "6",
+  "\u2077": "7",
+  "\u2078": "8",
+  "\u2079": "9",
+  "\u2080": "0",
+  "\u2081": "1",
+  "\u2082": "2",
+  "\u2083": "3",
+  "\u2084": "4",
+  "\u2085": "5",
+  "\u2086": "6",
+  "\u2087": "7",
+  "\u2088": "8",
+  "\u2089": "9",
+  "\u20AC": "EUR",
+  "\u2122": "TM",
+  "\u00AE": "(R)",
+  "\u00A9": "(C)"
+};
 
 function toPoints(inches: number) {
   return inches * POINTS_PER_INCH;
@@ -37,6 +93,26 @@ function wrapText(
 
   if (current) lines.push(current);
   return lines;
+}
+
+function sanitizeForPdfText(text: string, font: PDFFont) {
+  const normalized = text.replace(/\r\n?/g, "\n");
+  let output = "";
+
+  for (const character of normalized) {
+    const candidate = PDF_CHAR_REPLACEMENTS[character] ?? character;
+
+    for (const piece of candidate) {
+      try {
+        font.encodeText(piece);
+        output += piece;
+      } catch {
+        output += "?";
+      }
+    }
+  }
+
+  return output;
 }
 
 export async function buildProjectPdf(project: BookProject) {
@@ -92,8 +168,9 @@ export async function buildProjectPdf(project: BookProject) {
     const maxWidth = pageWidth - left - right;
 
     for (const line of lines) {
+      const safeLine = sanitizeForPdfText(line, font);
       ensureSpace(lineHeight);
-      page.drawText(line, {
+      page.drawText(safeLine, {
         x: left,
         y: cursorY,
         font,
@@ -114,7 +191,8 @@ export async function buildProjectPdf(project: BookProject) {
   ) {
     const { left, right } = getPageMargins(pageNumber);
     const maxWidth = pageWidth - left - right;
-    const lines = wrapText(text, maxWidth, size, (value, currentSize) =>
+    const safeText = sanitizeForPdfText(text, font);
+    const lines = wrapText(safeText, maxWidth, size, (value, currentSize) =>
       font.widthOfTextAtSize(value, currentSize)
     );
     writeLines(lines, font, size, lineHeight);
@@ -127,8 +205,9 @@ export async function buildProjectPdf(project: BookProject) {
   }
 
   function writeCenteredText(text: string, font: typeof bodyFont, size: number, y: number) {
-    const width = font.widthOfTextAtSize(text, size);
-    page.drawText(text, {
+    const safeText = sanitizeForPdfText(text, font);
+    const width = font.widthOfTextAtSize(safeText, size);
+    page.drawText(safeText, {
       x: (pageWidth - width) / 2,
       y,
       font,
