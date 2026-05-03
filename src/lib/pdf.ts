@@ -1,5 +1,5 @@
 import { PDFDocument, PDFFont, StandardFonts, rgb } from "pdf-lib";
-import { BOOK_LAYOUT, computeBookLayoutPlan } from "@/lib/book-layout";
+import { BOOK_LAYOUT, buildLayoutAppendixLines, computeBookLayoutPlan } from "@/lib/book-layout";
 import { buildCleanManuscript, parseImageDataUrl } from "@/lib/manuscript";
 import { sanitizeForPdfText } from "@/lib/pdf-text";
 import type { BookProject } from "@/lib/types";
@@ -118,6 +118,7 @@ export async function buildProjectPdf(project: BookProject) {
   );
   const layout = await computeBookLayoutPlan(project);
   const manuscript = buildCleanManuscript(project);
+  const appendixLines = buildLayoutAppendixLines();
   const pageWidth = toPoints(widthIn);
   const pageHeight = toPoints(heightIn);
   const topMargin = toPoints(layout.topMarginIn);
@@ -315,7 +316,7 @@ export async function buildProjectPdf(project: BookProject) {
     writeCenteredText(
       project.frontMatter.authorName,
       bodyFont,
-      12,
+      BOOK_LAYOUT.authorSize,
       pageHeight - toPoints(3.35)
     );
   }
@@ -466,6 +467,23 @@ export async function buildProjectPdf(project: BookProject) {
       );
     }
   }
+
+  nextPage();
+  writeHeading("Annexe - Donnees de mise en page", BOOK_LAYOUT.annexTitleSize, 8);
+  appendixLines.slice(1).forEach((line) => {
+    if (!line.trim()) {
+      cursorY -= 6;
+      return;
+    }
+    writeParagraph(
+      line,
+      bodyFont,
+      BOOK_LAYOUT.annexBodySize,
+      13.5,
+      4,
+      true
+    );
+  });
 
   drawFooter();
 

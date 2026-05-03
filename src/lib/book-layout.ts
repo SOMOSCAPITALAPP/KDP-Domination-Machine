@@ -2,25 +2,37 @@ import { PDFDocument, StandardFonts } from "pdf-lib";
 import { buildCleanManuscript } from "@/lib/manuscript";
 import { sanitizeForPdfText } from "@/lib/pdf-text";
 import type { BookProject } from "@/lib/types";
-import { estimatePaperbackPageCount, getKdpMarginPreset, getTrimSizeDimensions } from "@/lib/utils";
+import { getTrimSizeDimensions } from "@/lib/utils";
 
 const POINTS_PER_INCH = 72;
+const CM_TO_IN = 0.3937007874;
+
+export const MASTER_PAGE_SETUP_CM = {
+  top: 1.25,
+  bottom: 1.28,
+  left: 0.7,
+  right: 0.9,
+  gutter: 0.4
+} as const;
 
 export const BOOK_LAYOUT = {
-  titleSize: 24,
-  subtitleSize: 13,
-  chapterTitleSize: 18,
-  sectionTitleSize: 15,
-  bodyFontSize: 11.5,
-  bodyLineHeight: 17,
-  paragraphGap: 7,
-  headingGap: 10,
-  tocFontSize: 11,
-  tocLineHeight: 14,
+  titleSize: 28,
+  subtitleSize: 24,
+  authorSize: 20,
+  chapterTitleSize: 17,
+  sectionTitleSize: 13.5,
+  bodyFontSize: 11,
+  bodyLineHeight: 15.5,
+  paragraphGap: 5,
+  headingGap: 8,
+  tocFontSize: 10.5,
+  tocLineHeight: 12.5,
   tocGap: 2,
-  infoFontSize: 11,
-  infoLineHeight: 15,
-  imageHeight: 220
+  infoFontSize: 10.5,
+  infoLineHeight: 13.5,
+  imageHeight: 220,
+  annexTitleSize: 16,
+  annexBodySize: 10.5
 } as const;
 
 export type TocEntry = {
@@ -40,6 +52,34 @@ export type BookLayoutPlan = {
   chapterStartPages: Record<string, number>;
   tocEntries: TocEntry[];
 };
+
+export function cmToInches(value: number) {
+  return value * CM_TO_IN;
+}
+
+export function getMasterMarginInches() {
+  return {
+    topMarginIn: cmToInches(MASTER_PAGE_SETUP_CM.top),
+    bottomMarginIn: cmToInches(MASTER_PAGE_SETUP_CM.bottom),
+    insideMarginIn: cmToInches(MASTER_PAGE_SETUP_CM.left + MASTER_PAGE_SETUP_CM.gutter),
+    outsideMarginIn: cmToInches(MASTER_PAGE_SETUP_CM.right),
+    gutterIn: cmToInches(MASTER_PAGE_SETUP_CM.gutter)
+  };
+}
+
+export function buildLayoutAppendixLines() {
+  return [
+    "Annexe - Donnees de mise en page",
+    "",
+    "Modele applique systematiquement aux exports Word et PDF.",
+    `Marges hautes: ${MASTER_PAGE_SETUP_CM.top} cm`,
+    `Marges basses: ${MASTER_PAGE_SETUP_CM.bottom} cm`,
+    `Marge gauche: ${MASTER_PAGE_SETUP_CM.left} cm`,
+    `Marge droite: ${MASTER_PAGE_SETUP_CM.right} cm`,
+    `Reliure: ${MASTER_PAGE_SETUP_CM.gutter} cm, position a gauche`,
+    "Corps de texte harmonise en style livre broche, paragraphes justifies, noir uniforme et hierarchie stable des titres."
+  ];
+}
 
 function toPoints(inches: number) {
   return inches * POINTS_PER_INCH;
@@ -83,6 +123,7 @@ export async function computeBookLayoutPlan(project: BookProject): Promise<BookL
   const bodyFont = await probePdf.embedFont(StandardFonts.TimesRoman);
   const italicFont = await probePdf.embedFont(StandardFonts.TimesRomanItalic);
   const manuscript = buildCleanManuscript(project);
+  const appendixLines = buildLayoutAppendixLines();
   const { widthIn, heightIn } = getTrimSizeDimensions(
     project.paperback.trimSize,
     project.paperback.bleed
@@ -90,13 +131,13 @@ export async function computeBookLayoutPlan(project: BookProject): Promise<BookL
   const pageWidth = toPoints(widthIn);
   const pageHeight = toPoints(heightIn);
 
-  let pageCountGuess = estimatePaperbackPageCount(project);
-  let finalMargins = getKdpMarginPreset(pageCountGuess, project.paperback.bleed);
+  let pageCountGuess = Math.max(24, manuscript.length + 6);
+  let finalMargins = getMasterMarginInches();
   let chapterStartPages: Record<string, number> = {};
   let tocEntries: TocEntry[] = [];
 
   for (let pass = 0; pass < 2; pass += 1) {
-    finalMargins = getKdpMarginPreset(pageCountGuess, project.paperback.bleed);
+    finalMargins = getMasterMarginInches();
     const topMargin = toPoints(finalMargins.topMarginIn);
     const bottomMargin = toPoints(finalMargins.bottomMarginIn);
     const insideMargin = toPoints(finalMargins.insideMarginIn);
@@ -318,18 +359,24 @@ export async function computeBookLayoutPlan(project: BookProject): Promise<BookL
         );
       }
     }
-    const actualPageCount = pageNumber;
-    const nextMargins = getKdpMarginPreset(actualPageCount, project.paperback.bleed);
 
-    if (
-      nextMargins.insideMarginIn === finalMargins.insideMarginIn &&
-      nextMargins.outsideMarginIn === finalMargins.outsideMarginIn
-    ) {
-      pageCountGuess = actualPageCount;
-      break;
-    }
-
-    pageCountGuess = actualPageCount;
+    nextPage();
+    consumeHeading("Annexe - Donnees de mise en page", BOOK_LAYOUT.annexTitleSize, 8);
+    appendixLines.slice(1).forEach((line) => {
+      if (!line.trim()) {
+        cursorY -= 6;
+        return;
+      }
+      consumeParagraph(
+        line,
+        bodyFont,
+        BOOK_LAYOUT.annexBodySize,
+        13.5,
+        4
+      );
+    });
+    pageCountGuess = pageNumber;
+    break;
   }
 
   return {

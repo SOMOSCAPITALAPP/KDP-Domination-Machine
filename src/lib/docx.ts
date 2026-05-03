@@ -14,7 +14,12 @@ import {
   VerticalAlign,
   WidthType
 } from "docx";
-import { computeBookLayoutPlan } from "@/lib/book-layout";
+import {
+  MASTER_PAGE_SETUP_CM,
+  buildLayoutAppendixLines,
+  cmToInches,
+  computeBookLayoutPlan
+} from "@/lib/book-layout";
 import { buildCleanManuscript, parseImageDataUrl } from "@/lib/manuscript";
 import type { BookProject } from "@/lib/types";
 
@@ -36,7 +41,7 @@ function titleParagraph(text: string) {
   return new Paragraph({
     alignment: AlignmentType.CENTER,
     spacing: { after: 220 },
-    children: [run(text, 34, true)]
+    children: [run(text, 56, true)]
   });
 }
 
@@ -59,7 +64,7 @@ function chapterTitle(text: string) {
   return new Paragraph({
     spacing: { before: 200, after: 180 },
     pageBreakBefore: true,
-    children: [run(text, 30, true)]
+    children: [run(text, 34, true)]
   });
 }
 
@@ -73,8 +78,8 @@ function subHeading(text: string) {
 function bodyParagraph(text: string, italic = false) {
   return new Paragraph({
     alignment: AlignmentType.JUSTIFIED,
-    spacing: { after: 120, line: 330 },
-    children: [run(text, 24, false, italic)]
+    spacing: { after: 90, line: 300 },
+    children: [run(text, 22, false, italic)]
   });
 }
 
@@ -82,8 +87,8 @@ function bulletParagraph(text: string) {
   return new Paragraph({
     alignment: AlignmentType.JUSTIFIED,
     bullet: { level: 0 },
-    spacing: { after: 80, line: 320 },
-    children: [run(text, 24)]
+    spacing: { after: 60, line: 300 },
+    children: [run(text, 22)]
   });
 }
 
@@ -129,7 +134,7 @@ function tocTable(project: BookProject, entries: Array<{ title: string; page: nu
             children: [
               new Paragraph({
                 spacing: { after: 40 },
-                children: [run(entry.title, 22)]
+                children: [run(entry.title, 21)]
               })
             ]
           }),
@@ -146,7 +151,7 @@ function tocTable(project: BookProject, entries: Array<{ title: string; page: nu
               new Paragraph({
                 alignment: AlignmentType.RIGHT,
                 spacing: { after: 40 },
-                children: [run(String(entry.page), 22)]
+                children: [run(String(entry.page), 21)]
               })
             ]
           })
@@ -191,10 +196,11 @@ function tocTable(project: BookProject, entries: Array<{ title: string; page: nu
 export async function buildProjectDocx(project: BookProject) {
   const manuscript = buildCleanManuscript(project);
   const layout = await computeBookLayoutPlan(project);
+  const appendixLines = buildLayoutAppendixLines();
   const children: Array<Paragraph | Table> = [
     titleParagraph(project.title),
-    centeredParagraph(project.packaging.seoSubtitle || project.promise || "Manuscrit KDP", 24, true),
-    centeredParagraph(project.frontMatter.authorName || "", 24)
+    centeredParagraph(project.packaging.seoSubtitle || project.promise || "Manuscrit KDP", 48, true),
+    centeredParagraph(project.frontMatter.authorName || "", 40)
   ];
 
   children.push(sectionTitle("Informations editoriales"));
@@ -296,16 +302,32 @@ export async function buildProjectDocx(project: BookProject) {
     }
   }
 
+  children.push(
+    new Paragraph({
+      pageBreakBefore: true,
+      spacing: { after: 160 },
+      children: [run("Annexe - Donnees de mise en page", 28, true)]
+    })
+  );
+  appendixLines.slice(1).forEach((line) => {
+    if (!line.trim()) {
+      children.push(new Paragraph({ spacing: { after: 80 } }));
+      return;
+    }
+    children.push(bodyParagraph(line));
+  });
+
   const document = new Document({
     sections: [
       {
         properties: {
           page: {
             margin: {
-              top: Math.round(layout.topMarginIn * 1440),
-              bottom: Math.round(layout.bottomMarginIn * 1440),
-              left: Math.round(layout.insideMarginIn * 1440),
-              right: Math.round(layout.outsideMarginIn * 1440)
+              top: Math.round(cmToInches(MASTER_PAGE_SETUP_CM.top) * 1440),
+              bottom: Math.round(cmToInches(MASTER_PAGE_SETUP_CM.bottom) * 1440),
+              left: Math.round(cmToInches(MASTER_PAGE_SETUP_CM.left) * 1440),
+              right: Math.round(cmToInches(MASTER_PAGE_SETUP_CM.right) * 1440),
+              gutter: Math.round(cmToInches(MASTER_PAGE_SETUP_CM.gutter) * 1440)
             }
           }
         },
