@@ -4,6 +4,8 @@ import { Download, LogOut, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { BookProject } from "@/lib/types";
 
+const APP_BUILD = "ac6aeb3";
+
 type TopbarProps = {
   activeProject: BookProject | null;
   projects: BookProject[];
@@ -19,8 +21,10 @@ export function Topbar({ activeProject, projects, onLogout }: TopbarProps) {
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.download = "kdp-projects.json";
+    document.body.appendChild(anchor);
     anchor.click();
-    URL.revokeObjectURL(url);
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
   }
 
   return (
@@ -28,12 +32,15 @@ export function Topbar({ activeProject, projects, onLogout }: TopbarProps) {
       <div>
         <p className="text-xs uppercase tracking-[0.35em] text-gold">Production desk</p>
         <h2 className="mt-2 text-2xl font-semibold text-ink">
-          {activeProject?.title ?? "Sélectionne un projet"}
+          {activeProject?.title ?? "Selectionne un projet"}
         </h2>
         <p className="mt-2 text-sm text-slate-600">
           {activeProject
-            ? `${activeProject.format} • ${activeProject.type} • ${activeProject.language}`
-            : "Crée un nouveau livre pour commencer."}
+            ? `${activeProject.format} - ${activeProject.type} - ${activeProject.language}`
+            : "Cree un nouveau livre pour commencer."}
+        </p>
+        <p className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-400">
+          Build {APP_BUILD}
         </p>
       </div>
       <div className="flex flex-wrap gap-3">
@@ -47,10 +54,9 @@ export function Topbar({ activeProject, projects, onLogout }: TopbarProps) {
         </Button>
         <Button variant="ghost" onClick={() => void onLogout()}>
           <LogOut className="mr-2 h-4 w-4" />
-          Déconnexion
+          Deconnexion
         </Button>
       </div>
     </header>
   );
 }
-
