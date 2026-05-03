@@ -45,6 +45,8 @@ export function BookWorkspace({
   const [chapterImageOptions, setChapterImageOptions] = useState<Record<string, ChapterImageOption[]>>({});
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string>("");
   const [pdfMeta, setPdfMeta] = useState<PdfPreviewMeta | null>(null);
+  const [imageCooldownUntil, setImageCooldownUntil] = useState(0);
+  const [clockTick, setClockTick] = useState(() => Date.now());
   const latestProjectRef = useRef(project);
   const deferredProject = useDeferredValue(project);
   const actualWords = useMemo(() => getTotalWordCount(project), [project]);
@@ -71,6 +73,16 @@ export function BookWorkspace({
     };
   }, [pdfPreviewUrl]);
 
+  useEffect(() => {
+    if (imageCooldownUntil <= Date.now()) return;
+
+    const timer = window.setInterval(() => {
+      setClockTick(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [imageCooldownUntil]);
+
   function patch(partial: Partial<BookProject>) {
     const current = latestProjectRef.current;
     onProjectChange({
@@ -92,6 +104,12 @@ export function BookWorkspace({
   function isChapterLocked(chapterId: string) {
     return Object.entries(busyTasks).some(([key, value]) => value && key.endsWith(`:${chapterId}`));
   }
+
+  const imageCooldownSeconds = Math.max(
+    0,
+    Math.ceil((imageCooldownUntil - clockTick) / 1000)
+  );
+  const imageRateLimited = imageCooldownSeconds > 0;
 
   function startTask(kind: string, chapterId?: string) {
     const key = taskKey(kind, chapterId);
@@ -126,8 +144,20 @@ export function BookWorkspace({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ kind, project: projectSnapshot, chapterId })
       });
-      const data = (await response.json()) as GeneratedPayload & { error?: string };
+      const data = (await response.json()) as GeneratedPayload & {
+        error?: string;
+        retryAfterSeconds?: number;
+      };
       if (!response.ok || data.error) {
+        if (kind === "chapterImages" && response.status === 429) {
+          const retryAfterSeconds = Math.max(1, data.retryAfterSeconds ?? 15);
+          setImageCooldownUntil(Date.now() + retryAfterSeconds * 1000);
+          setClockTick(Date.now());
+          alert(
+            `Limite image temporairement atteinte. Nouvelle tentative possible dans ${retryAfterSeconds}s.`
+          );
+          return;
+        }
         alert(data.error ?? "Generation impossible.");
         return;
       }
@@ -141,6 +171,7 @@ export function BookWorkspace({
           ...current,
           [chapterId || ""]: data.chapterImages ?? []
         }));
+        setImageCooldownUntil(0);
         return;
       }
 
@@ -458,6 +489,8 @@ export function BookWorkspace({
                 key={chapter.id}
                 isTaskBusy={(kind) => isBusy(kind, chapter.id)}
                 chapterLocked={isChapterLocked(chapter.id)}
+                imageRateLimited={imageRateLimited}
+                imageCooldownSeconds={imageCooldownSeconds}
                 imageOptions={chapterImageOptions[chapter.id] ?? []}
                 chapter={chapter}
                 translationMode={Boolean(project.translationSource)}
@@ -827,6 +860,8 @@ function ChapterEditor({
   onGenerate,
   isTaskBusy,
   chapterLocked,
+  imageRateLimited,
+  imageCooldownSeconds,
   translationMode,
   imageOptions,
   onChooseImage
@@ -836,6 +871,8 @@ function ChapterEditor({
   onGenerate: (kind: GenerationKind) => void;
   isTaskBusy: (kind: GenerationKind) => boolean;
   chapterLocked: boolean;
+  imageRateLimited: boolean;
+  imageCooldownSeconds: number;
   translationMode: boolean;
   imageOptions: ChapterImageOption[];
   onChooseImage: (option: ChapterImageOption) => void | Promise<void>;
@@ -873,9 +910,13 @@ function ChapterEditor({
               key={kind}
               variant="secondary"
               onClick={() => onGenerate(kind)}
-              disabled={chapterLocked}
+              disabled={chapterLocked || (kind === "chapterImages" && imageRateLimited)}
             >
-              {isTaskBusy(kind) ? "En cours..." : label}
+              {kind === "chapterImages" && imageRateLimited
+                ? `Photos dans ${imageCooldownSeconds}s`
+                : isTaskBusy(kind)
+                  ? "En cours..."
+                  : label}
             </Button>
           ))}
         </div>

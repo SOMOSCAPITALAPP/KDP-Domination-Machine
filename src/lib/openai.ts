@@ -26,6 +26,40 @@ import { countWords, getFormatPlan, uid } from "@/lib/utils";
 
 let client: OpenAI | null = null;
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function extractRetryAfterSeconds(error: unknown) {
+  if (!error || typeof error !== "object") return null;
+
+  const candidate = error as {
+    status?: number;
+    message?: string;
+    headers?: Record<string, string>;
+  };
+
+  if (candidate.status !== 429) return null;
+
+  const headerValue =
+    candidate.headers?.["retry-after"] ??
+    candidate.headers?.["Retry-After"] ??
+    null;
+
+  if (headerValue) {
+    const parsed = Number(headerValue);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return Math.ceil(parsed);
+    }
+  }
+
+  const match = candidate.message?.match(/try again in\s+(\d+)s/i);
+  if (!match) return 15;
+
+  const seconds = Number(match[1]);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : 15;
+}
+
 function getClient() {
   if (!process.env.OPENAI_API_KEY) return null;
   if (!client) {
@@ -156,13 +190,29 @@ async function generateChapterImages(project: BookProject, chapterId?: string) {
   const chapter = project.chapters.find((item) => item.id === chapterId);
   if (!sdk || !chapter) return null;
 
-  const response = await sdk.images.generate({
-    model: "gpt-image-1",
-    prompt: chapterImagePrompt(project, chapter),
-    n: 3,
-    size: "1024x1024",
-    quality: "low"
-  });
+  const runRequest = async () =>
+    sdk.images.generate({
+      model: "gpt-image-1",
+      prompt: chapterImagePrompt(project, chapter),
+      n: 3,
+      size: "1024x1024",
+      quality: "low"
+    });
+
+  let response;
+
+  try {
+    response = await runRequest();
+  } catch (error) {
+    const retryAfterSeconds = extractRetryAfterSeconds(error);
+
+    if (retryAfterSeconds && retryAfterSeconds <= 15) {
+      await sleep((retryAfterSeconds + 1) * 1000);
+      response = await runRequest();
+    } else {
+      throw error;
+    }
+  }
 
   const images: ChapterImageOption[] = (response.data ?? [])
     .map((item, index) => {
