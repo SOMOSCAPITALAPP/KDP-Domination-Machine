@@ -11,9 +11,12 @@ import { demoProject } from "@/lib/demo-data";
 import { createProject, loadProjects, saveProjects } from "@/lib/storage";
 import { normalizeProject } from "@/lib/storage";
 import type {
+  BookFormat,
   BookProject,
   BookProjectInput,
-  BookStatus
+  BookStatus,
+  ImportWorkflowMode,
+  TranslationLanguage
 } from "@/lib/types";
 
 export function AppShell() {
@@ -72,13 +75,17 @@ export function AppShell() {
 
   async function importTemplate(payload: {
     file: File;
-    collectionName: string;
-    targetVolumeTopic: string;
+    mode: ImportWorkflowMode;
+    targetVolumeTopic?: string;
+    format?: BookFormat;
+    targetLanguage?: TranslationLanguage;
   }) {
     const formData = new FormData();
     formData.set("file", payload.file);
-    formData.set("collectionName", payload.collectionName);
-    formData.set("targetVolumeTopic", payload.targetVolumeTopic);
+    formData.set("mode", payload.mode);
+    if (payload.targetVolumeTopic) formData.set("targetVolumeTopic", payload.targetVolumeTopic);
+    if (payload.format) formData.set("format", payload.format);
+    if (payload.targetLanguage) formData.set("targetLanguage", payload.targetLanguage);
 
     const response = await fetch("/api/template/import", {
       method: "POST",

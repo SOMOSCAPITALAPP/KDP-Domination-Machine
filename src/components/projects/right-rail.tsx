@@ -60,6 +60,20 @@ export function RightRail({ activeProject }: { activeProject: BookProject | null
         </Card>
       ) : null}
 
+      {activeProject.translationSource ? (
+        <Card title="Projet de traduction">
+          <p className="text-sm text-slate-600">
+            Source: {activeProject.translationSource.sourceFileName}
+          </p>
+          <p className="mt-2 text-sm text-slate-600">
+            Langue cible: {activeProject.translationSource.targetLanguage}
+          </p>
+          <p className="mt-2 text-xs text-slate-500">
+            Traduction chapitre par chapitre, avec consigne editoriale professionnelle.
+          </p>
+        </Card>
+      ) : null}
+
       <Card title="Checklist IA KDP">
         <p className="text-sm text-slate-600">
           {completedChecklist}/{totalChecklist} items valides avant upload.

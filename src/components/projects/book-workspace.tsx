@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Download, Eye, FileCheck2, FileText, Sparkles, Wand2 } from "lucide-react";
 import { SectionCard } from "@/components/projects/section-card";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ import { AI_MODEL_NAME, TRIM_SIZES, initialCompliance } from "@/lib/constants";
 import { estimateProgress, getPdfPreviewMeta, getTotalWordCount, getTotalWordGoal, slugify } from "@/lib/utils";
 import type {
   BookProject,
+  ChapterImageOption,
   BookProjectSectionKey,
   Chapter,
   GeneratedPayload,
@@ -40,12 +41,18 @@ export function BookWorkspace({
   onProjectChange: (project: BookProject) => void;
 }) {
   const [tab, setTab] = useState<BookProjectSectionKey>("overview");
-  const [busy, setBusy] = useState<string>("");
+  const [busyTasks, setBusyTasks] = useState<Record<string, boolean>>({});
+  const [chapterImageOptions, setChapterImageOptions] = useState<Record<string, ChapterImageOption[]>>({});
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string>("");
   const [pdfMeta, setPdfMeta] = useState<PdfPreviewMeta | null>(null);
+  const latestProjectRef = useRef(project);
   const deferredProject = useDeferredValue(project);
   const actualWords = useMemo(() => getTotalWordCount(project), [project]);
   const goalWords = useMemo(() => getTotalWordGoal(project), [project]);
+
+  useEffect(() => {
+    latestProjectRef.current = project;
+  }, [project]);
 
   useEffect(() => {
     const next = {
@@ -65,30 +72,73 @@ export function BookWorkspace({
   }, [pdfPreviewUrl]);
 
   function patch(partial: Partial<BookProject>) {
+    const current = latestProjectRef.current;
     onProjectChange({
-      ...project,
+      ...current,
       ...partial,
-      progress: estimateProgress({ ...project, ...partial }),
+      progress: estimateProgress({ ...current, ...partial }),
       updatedAt: new Date().toISOString()
     });
   }
 
-  async function generate(kind: GenerationKind, chapterId?: string) {
-    setBusy(kind);
-    const response = await fetch("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind, project, chapterId })
-    });
-    const data = (await response.json()) as GeneratedPayload & { error?: string };
-    setBusy("");
-    if (!response.ok || data.error) {
-      alert(data.error ?? "Generation impossible.");
-      return;
-    }
+  function taskKey(kind: string, chapterId?: string) {
+    return chapterId ? `${kind}:${chapterId}` : kind;
+  }
 
-    const updated = applyGeneratedPayload(project, kind, data, chapterId);
-    onProjectChange(updated);
+  function isBusy(kind: string, chapterId?: string) {
+    return Boolean(busyTasks[taskKey(kind, chapterId)]);
+  }
+
+  function isChapterLocked(chapterId: string) {
+    return Object.entries(busyTasks).some(([key, value]) => value && key.endsWith(`:${chapterId}`));
+  }
+
+  function startTask(kind: string, chapterId?: string) {
+    const key = taskKey(kind, chapterId);
+    setBusyTasks((current) => ({ ...current, [key]: true }));
+  }
+
+  function finishTask(kind: string, chapterId?: string) {
+    const key = taskKey(kind, chapterId);
+    setBusyTasks((current) => {
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  }
+
+  async function generate(kind: GenerationKind, chapterId?: string) {
+    try {
+      startTask(kind, chapterId);
+      const projectSnapshot = latestProjectRef.current;
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind, project: projectSnapshot, chapterId })
+      });
+      const data = (await response.json()) as GeneratedPayload & { error?: string };
+      if (!response.ok || data.error) {
+        alert(data.error ?? "Generation impossible.");
+        return;
+      }
+
+      if (kind === "chapterImages") {
+        if (!data.chapterImages || data.chapterImages.length === 0) {
+          alert("Aucune image n'a ete generee pour ce chapitre.");
+          return;
+        }
+        setChapterImageOptions((current) => ({
+          ...current,
+          [chapterId || ""]: data.chapterImages ?? []
+        }));
+        return;
+      }
+
+      const updated = applyGeneratedPayload(latestProjectRef.current, kind, data, chapterId);
+      onProjectChange(updated);
+    } finally {
+      finishTask(kind, chapterId);
+    }
   }
 
   async function requestPdf() {
@@ -124,22 +174,22 @@ export function BookWorkspace({
 
   async function previewPdf() {
     try {
-      setBusy("preview-pdf");
+      startTask("preview-pdf");
       const { blob, meta } = await requestPdf();
       if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
       const nextUrl = URL.createObjectURL(blob);
       setPdfPreviewUrl(nextUrl);
       setPdfMeta(meta);
-      setBusy("");
     } catch (error) {
-      setBusy("");
       alert(error instanceof Error ? error.message : "Preview PDF impossible.");
+    } finally {
+      finishTask("preview-pdf");
     }
   }
 
   async function downloadPdf() {
     try {
-      setBusy("download-pdf");
+      startTask("download-pdf");
       const { blob, meta } = await requestPdf();
       const href = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -150,38 +200,40 @@ export function BookWorkspace({
       anchor.remove();
       URL.revokeObjectURL(href);
       setPdfMeta(meta);
-      setBusy("");
     } catch (error) {
-      setBusy("");
       alert(error instanceof Error ? error.message : "Telechargement PDF impossible.");
+    } finally {
+      finishTask("download-pdf");
     }
   }
 
   async function exportBundle() {
-    setBusy("export");
-    const response = await fetch("/api/export", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ project })
-    });
+    try {
+      startTask("export");
+      const response = await fetch("/api/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project: latestProjectRef.current })
+      });
 
-    if (!response.ok) {
-      const data = (await response.json()) as { error?: string };
-      setBusy("");
-      alert(data.error ?? "Export impossible.");
-      return;
+      if (!response.ok) {
+        const data = (await response.json()) as { error?: string };
+        alert(data.error ?? "Export impossible.");
+        return;
+      }
+
+      const blob = await response.blob();
+      const href = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = href;
+      anchor.download = `${slugify(latestProjectRef.current.title)}-${latestProjectRef.current.id.slice(0, 8)}.zip`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(href);
+    } finally {
+      finishTask("export");
     }
-
-    const blob = await response.blob();
-    setBusy("");
-    const href = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = href;
-    anchor.download = `${slugify(project.title)}-${project.id.slice(0, 8)}.zip`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(href);
   }
 
   const suggestedPdfMeta = pdfMeta || getPdfPreviewMeta(project);
@@ -194,9 +246,9 @@ export function BookWorkspace({
         <SectionCard
           title="Fiche projet et debut de livre"
           actions={
-            <Button onClick={() => void generate("frontMatter")} disabled={busy === "frontMatter"}>
+            <Button onClick={() => void generate("frontMatter")} disabled={isBusy("frontMatter")}>
               <Sparkles className="mr-2 h-4 w-4" />
-              {busy === "frontMatter" ? "Generation..." : "Generer preface et introduction"}
+              {isBusy("frontMatter") ? "Generation..." : "Generer preface et introduction"}
             </Button>
           }
         >
@@ -239,9 +291,9 @@ export function BookWorkspace({
         <SectionCard
           title="Concept Best-Seller"
           actions={
-            <Button onClick={() => void generate("concept")} disabled={busy === "concept"}>
+            <Button onClick={() => void generate("concept")} disabled={isBusy("concept")}>
               <Sparkles className="mr-2 h-4 w-4" />
-              {busy === "concept" ? "Generation..." : "Generer le concept"}
+              {isBusy("concept") ? "Generation..." : "Generer le concept"}
             </Button>
           }
         >
@@ -276,9 +328,9 @@ export function BookWorkspace({
         <SectionCard
           title="Plan du livre"
           actions={
-            <Button onClick={() => void generate("outline")} disabled={busy === "outline"}>
+            <Button onClick={() => void generate("outline")} disabled={isBusy("outline")}>
               <Sparkles className="mr-2 h-4 w-4" />
-              {busy === "outline" ? "Generation..." : "Generer le plan"}
+              {isBusy("outline") ? "Generation..." : "Generer le plan"}
             </Button>
           }
         >
@@ -336,8 +388,16 @@ export function BookWorkspace({
             {project.chapters.map((chapter) => (
               <ChapterEditor
                 key={chapter.id}
-                busy={busy}
+                isTaskBusy={(kind) => isBusy(kind, chapter.id)}
+                chapterLocked={isChapterLocked(chapter.id)}
+                imageOptions={chapterImageOptions[chapter.id] ?? []}
                 chapter={chapter}
+                translationMode={Boolean(project.translationSource)}
+                onChooseImage={(option) =>
+                  onProjectChange(
+                    applySelectedChapterImage(latestProjectRef.current, chapter.id, option)
+                  )
+                }
                 onChange={(nextChapter) =>
                   patch({
                     chapters: project.chapters.map((item) =>
@@ -362,14 +422,14 @@ export function BookWorkspace({
                 ["rewriteHuman", "Rendre plus humain"],
                 ["compliance", "Verifier conformite"]
               ].map(([kind, label]) => (
-                <Button
-                  key={kind}
-                  variant="secondary"
-                  onClick={() => void generate(kind as GenerationKind)}
-                  disabled={busy === kind}
-                >
-                  <Wand2 className="mr-2 h-4 w-4" />
-                  {label}
+                  <Button
+                    key={kind}
+                    variant="secondary"
+                    onClick={() => void generate(kind as GenerationKind)}
+                    disabled={isBusy(kind)}
+                  >
+                    <Wand2 className="mr-2 h-4 w-4" />
+                    {label}
                 </Button>
               ))}
             </div>
@@ -403,7 +463,7 @@ export function BookWorkspace({
                 <Button
                   key={kind}
                   onClick={() => void generate(kind as GenerationKind)}
-                  disabled={busy === kind}
+                  disabled={isBusy(kind)}
                 >
                   <Sparkles className="mr-2 h-4 w-4" />
                   {label}
@@ -497,17 +557,17 @@ export function BookWorkspace({
           title="Export KDP interieur + bundle"
           actions={
             <div className="flex flex-wrap gap-2">
-              <Button variant="secondary" onClick={() => void previewPdf()} disabled={busy === "preview-pdf"}>
+              <Button variant="secondary" onClick={() => void previewPdf()} disabled={isBusy("preview-pdf")}>
                 <Eye className="mr-2 h-4 w-4" />
-                {busy === "preview-pdf" ? "Preview..." : "Previsualiser PDF KDP"}
+                {isBusy("preview-pdf") ? "Preview..." : "Previsualiser PDF KDP"}
               </Button>
-              <Button variant="secondary" onClick={() => void downloadPdf()} disabled={busy === "download-pdf"}>
+              <Button variant="secondary" onClick={() => void downloadPdf()} disabled={isBusy("download-pdf")}>
                 <FileText className="mr-2 h-4 w-4" />
-                {busy === "download-pdf" ? "PDF..." : "Telecharger PDF KDP"}
+                {isBusy("download-pdf") ? "PDF..." : "Telecharger PDF KDP"}
               </Button>
-              <Button onClick={() => void exportBundle()} disabled={busy === "export"}>
+              <Button onClick={() => void exportBundle()} disabled={isBusy("export")}>
                 <Download className="mr-2 h-4 w-4" />
-                {busy === "export" ? "Export..." : "Exporter le dossier"}
+                {isBusy("export") ? "Export..." : "Exporter le dossier"}
               </Button>
             </div>
           }
@@ -689,14 +749,38 @@ function ChapterEditor({
   chapter,
   onChange,
   onGenerate,
-  busy
+  isTaskBusy,
+  chapterLocked,
+  translationMode,
+  imageOptions,
+  onChooseImage
 }: {
   chapter: Chapter;
   onChange: (chapter: Chapter) => void;
   onGenerate: (kind: GenerationKind) => void;
-  busy: string;
+  isTaskBusy: (kind: GenerationKind) => boolean;
+  chapterLocked: boolean;
+  translationMode: boolean;
+  imageOptions: ChapterImageOption[];
+  onChooseImage: (option: ChapterImageOption) => void;
 }) {
   const chapterProgress = Math.min(100, Math.round((chapter.wordCount / Math.max(1, chapter.targetWords)) * 100));
+  const actionItems: Array<[GenerationKind, string]> = translationMode
+    ? [
+        ["chapter", "Traduire chapitre"],
+        ["develop", "Fluidifier la traduction"],
+        ["simplify", "Simplifier le style"],
+        ["correction", "Corriger chapitre"]
+      ]
+    : [
+        ["chapter", "Generer chapitre"],
+        ["rewriteHuman", "Reecrire plus humain"],
+        ["develop", "Developper"],
+        ["simplify", "Simplifier"],
+        ["examples", "Ajouter exemples"],
+        ["correction", "Corriger chapitre"],
+        ["chapterImages", "Generer 3 photos"]
+      ];
 
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -708,20 +792,14 @@ function ChapterEditor({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {[
-            ["chapter", "Generer chapitre"],
-            ["rewriteHuman", "Reecrire plus humain"],
-            ["develop", "Developper"],
-            ["simplify", "Simplifier"],
-            ["examples", "Ajouter exemples"]
-          ].map(([kind, label]) => (
+          {actionItems.map(([kind, label]) => (
             <Button
               key={kind}
               variant="secondary"
-              onClick={() => onGenerate(kind as GenerationKind)}
-              disabled={busy === kind}
+              onClick={() => onGenerate(kind)}
+              disabled={chapterLocked}
             >
-              {label}
+              {isTaskBusy(kind) ? "En cours..." : label}
             </Button>
           ))}
         </div>
@@ -742,6 +820,45 @@ function ChapterEditor({
           }
         />
       </label>
+      {chapter.selectedIllustrationDataUrl ? (
+        <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-3">
+          <p className="text-sm font-medium text-ink">Photo choisie</p>
+          <img
+            src={chapter.selectedIllustrationDataUrl}
+            alt={`Illustration choisie pour ${chapter.title}`}
+            className="mt-3 h-48 w-full rounded-xl object-cover"
+          />
+        </div>
+      ) : null}
+      {imageOptions.length > 0 ? (
+        <div className="mt-4 space-y-3">
+          <p className="text-sm font-medium text-ink">3 options photo</p>
+          <div className="grid gap-3 lg:grid-cols-3">
+            {imageOptions.map((option, index) => (
+              <div key={option.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <img
+                  src={option.imageDataUrl}
+                  alt={`Option ${index + 1} pour ${chapter.title}`}
+                  className="h-44 w-full rounded-xl object-cover"
+                />
+                <Button
+                  className="mt-3 w-full"
+                  variant="secondary"
+                  onClick={() => onChooseImage(option)}
+                >
+                  Choisir cette photo
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      {translationMode && chapter.sourceContent ? (
+        <label className="mt-4 block space-y-2">
+          <span className="text-sm font-medium text-ink">Texte source du chapitre</span>
+          <Textarea rows={12} value={chapter.sourceContent} readOnly className="bg-slate-50" />
+        </label>
+      ) : null}
       <Textarea
         className="mt-4"
         rows={18}
@@ -756,6 +873,30 @@ function ChapterEditor({
       />
     </article>
   );
+}
+
+function applySelectedChapterImage(
+  project: BookProject,
+  chapterId: string,
+  option: ChapterImageOption
+) {
+  const next = {
+    ...project,
+    chapters: project.chapters.map((chapter) =>
+      chapter.id === chapterId
+        ? {
+            ...chapter,
+            illustrationPrompt: option.prompt,
+            selectedIllustrationPrompt: option.prompt,
+            selectedIllustrationDataUrl: option.imageDataUrl
+          }
+        : chapter
+    )
+  };
+
+  next.progress = estimateProgress(next);
+  next.updatedAt = new Date().toISOString();
+  return next;
 }
 
 function applyGeneratedPayload(

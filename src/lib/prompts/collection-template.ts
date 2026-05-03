@@ -2,14 +2,14 @@ export function collectionTemplatePrompt({
   sourceFileName,
   sourceType,
   extractedText,
-  collectionName,
-  targetVolumeTopic
+  targetVolumeTopic,
+  format
 }: {
   sourceFileName: string;
   sourceType: "pdf" | "docx";
   extractedText: string;
-  collectionName: string;
   targetVolumeTopic: string;
+  format: string;
 }) {
   return `Tu analyses un livre deja publie pour en faire un modele de collection KDP reutilisable.
 
@@ -17,14 +17,21 @@ Fichier source:
 - Nom: ${sourceFileName}
 - Type: ${sourceType}
 
-Collection souhaitee: ${collectionName || "A deduire du livre source"}
-Nouveau volume a produire: ${targetVolumeTopic || "A deduire"}
+Nouveau sujet du livre a produire: ${targetVolumeTopic}
+Longueur cible demandee: ${format}
 
 Mission:
 - Identifier la structure recurrente du livre source.
-- En deduire un gabarit de collection reutilisable.
-- Adapter ce gabarit pour un nouveau volume centre sur "${targetVolumeTopic || "un nouveau sujet de la collection"}".
-- Produire un nouveau projet KDP exploitable avec le meme esprit de sommaire.
+- Deduire automatiquement la collection, le positionnement, le ton, le lecteur cible et les caracteristiques editoriales a partir du livre source.
+- Reutiliser le meme esprit de sommaire et la meme logique de progression, mais pour un nouveau livre centre sur "${targetVolumeTopic}".
+- Respecter la longueur cible "${format}" en proposant un nombre de chapitres et des objectifs mots adaptes.
+- Generer un projet KDP presque pret a rediger sans demander d'autres informations manuelles.
+
+Regles importantes:
+- Le nouveau livre doit etre original et ne pas recopier le texte du livre source.
+- Il doit seulement reutiliser la structure editoriale, le rythme, le type de chapitres, l'approche pedagogique et l'esprit de collection.
+- Deduis le nom de collection si possible depuis le contenu source. Si ce n'est pas clair, propose un nom de collection pertinent.
+- Deduis aussi auteur, maison d'edition, ton, type de livre, niche et lecteur cible de facon plausible.
 
 Retourne UNIQUEMENT un JSON valide:
 {
@@ -32,7 +39,7 @@ Retourne UNIQUEMENT un JSON valide:
   "language": "Francais",
   "niche": "...",
   "audience": "...",
-  "format": "100 pages",
+  "format": "${format}",
   "type": "guide pratique",
   "tone": "pedagogique",
   "businessGoal": "...",
@@ -69,7 +76,7 @@ Retourne UNIQUEMENT un JSON valide:
   "collectionTemplate": {
     "sourceTitle": "...",
     "collectionName": "...",
-    "targetVolumeTopic": "...",
+    "targetVolumeTopic": "${targetVolumeTopic}",
     "recurringPromise": "...",
     "structureNotes": "...",
     "chapterPattern": ["..."],

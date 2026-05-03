@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { AI_MODEL_NAME, defaultFrontMatter, initialCompliance } from "@/lib/constants";
 import { chapterPrompt } from "@/lib/prompts/chapter";
+import { chapterImagePrompt } from "@/lib/prompts/chapter-images";
 import { complianceChecklistPrompt } from "@/lib/prompts/compliance-checklist";
 import { conceptPrompt } from "@/lib/prompts/concept";
 import { correctionPrompt } from "@/lib/prompts/correction";
@@ -10,9 +11,11 @@ import { keywordPrompt } from "@/lib/prompts/keywords";
 import { kdpDescriptionPrompt } from "@/lib/prompts/kdp-description";
 import { outlinePrompt } from "@/lib/prompts/outline";
 import { rewriteHumanPrompt } from "@/lib/prompts/rewrite-human";
+import { translationChapterPrompt } from "@/lib/prompts/translation-chapter";
 import type {
   BookProject,
   Chapter,
+  ChapterImageOption,
   ComplianceItem,
   FrontMatterData,
   GeneratedPayload,
@@ -36,13 +39,35 @@ function getClient() {
 
 function buildPrompt(request: GenerationRequest) {
   const chapter = request.project.chapters.find((item) => item.id === request.chapterId);
+  const translationTarget = request.project.translationSource?.targetLanguage;
 
   if (request.kind === "concept") return conceptPrompt(request.project);
   if (request.kind === "outline") return outlinePrompt(request.project);
   if (request.kind === "frontMatter") return frontMatterPrompt(request.project);
-  if (request.kind === "chapter" && chapter) return chapterPrompt(request.project, chapter);
-  if (request.kind === "rewriteHuman") return rewriteHumanPrompt(request.project);
+  if (request.kind === "chapterImages" && chapter) return chapterImagePrompt(request.project, chapter);
+  if (request.kind === "chapter" && chapter) {
+    if (translationTarget && chapter.sourceContent.trim()) {
+      return translationChapterPrompt({
+        project: request.project,
+        chapter,
+        targetLanguage: translationTarget
+      });
+    }
+    return chapterPrompt(request.project, chapter);
+  }
+  if (request.kind === "rewriteHuman") {
+    return chapter ? rewriteHumanPrompt(request.project, chapter) : rewriteHumanPrompt(request.project);
+  }
   if (request.kind === "develop" && chapter) {
+    if (translationTarget && chapter.sourceContent.trim()) {
+      return translationChapterPrompt({
+        project: request.project,
+        chapter,
+        targetLanguage: translationTarget,
+        instruction:
+          "Reprends la traduction complete de facon encore plus fluide, idiomatique et editoriale, sans ajouter de contenu."
+      });
+    }
     return chapterPrompt(
       request.project,
       chapter,
@@ -50,6 +75,15 @@ function buildPrompt(request: GenerationRequest) {
     );
   }
   if (request.kind === "simplify" && chapter) {
+    if (translationTarget && chapter.sourceContent.trim()) {
+      return translationChapterPrompt({
+        project: request.project,
+        chapter,
+        targetLanguage: translationTarget,
+        instruction:
+          "Traduis le chapitre avec une formulation plus simple et plus accessible dans la langue cible, sans rien omettre d'important."
+      });
+    }
     return chapterPrompt(
       request.project,
       chapter,
@@ -57,13 +91,24 @@ function buildPrompt(request: GenerationRequest) {
     );
   }
   if (request.kind === "examples" && chapter) {
+    if (translationTarget && chapter.sourceContent.trim()) {
+      return translationChapterPrompt({
+        project: request.project,
+        chapter,
+        targetLanguage: translationTarget,
+        instruction:
+          "Traduis fidelement les exemples existants et rends-les naturels dans la langue cible, sans en inventer de nouveaux."
+      });
+    }
     return chapterPrompt(
       request.project,
       chapter,
       "Ajoute beaucoup plus d'exemples, de cas concrets, de situations vecues et d'applications immediates."
     );
   }
-  if (request.kind === "correction") return correctionPrompt(request.project);
+  if (request.kind === "correction") {
+    return chapter ? correctionPrompt(request.project, chapter) : correctionPrompt(request.project);
+  }
   if (request.kind === "packaging") return kdpDescriptionPrompt(request.project);
   if (request.kind === "keywords") return keywordPrompt(request.project);
   if (request.kind === "coverBrief") return coverBriefPrompt(request.project);
@@ -104,6 +149,35 @@ async function askModel(kind: GenerationKind, prompt: string) {
   });
 
   return response.choices[0]?.message?.content ?? null;
+}
+
+async function generateChapterImages(project: BookProject, chapterId?: string) {
+  const sdk = getClient();
+  const chapter = project.chapters.find((item) => item.id === chapterId);
+  if (!sdk || !chapter) return null;
+
+  const response = await sdk.images.generate({
+    model: "gpt-image-1",
+    prompt: chapterImagePrompt(project, chapter),
+    n: 3,
+    size: "1024x1024",
+    quality: "low"
+  });
+
+  const images: ChapterImageOption[] = (response.data ?? [])
+    .map((item, index) => {
+      const b64 = typeof item.b64_json === "string" ? item.b64_json : "";
+      if (!b64) return null;
+
+      return {
+        id: `${chapter.id}-image-${index + 1}`,
+        prompt: `${chapter.title} - option ${index + 1}`,
+        imageDataUrl: `data:image/png;base64,${b64}`
+      } satisfies ChapterImageOption;
+    })
+    .filter((item): item is ChapterImageOption => Boolean(item));
+
+  return images;
 }
 
 function safeJsonParse(raw: string | null) {
@@ -195,7 +269,12 @@ function normalizeOutline(project: BookProject, payload: Record<string, unknown>
         asNumber(current.targetWords, project.chapters[index]?.targetWords || plan.targetWords)
       ),
       wordCount: project.chapters[index]?.wordCount || 0,
-      content: project.chapters[index]?.content || ""
+      content: project.chapters[index]?.content || "",
+      sourceContent: project.chapters[index]?.sourceContent || "",
+      selectedIllustrationPrompt:
+        project.chapters[index]?.selectedIllustrationPrompt || "",
+      selectedIllustrationDataUrl:
+        project.chapters[index]?.selectedIllustrationDataUrl || ""
     });
   }
 
@@ -303,6 +382,11 @@ function normalizePayload(request: GenerationRequest, payload: Record<string, un
   }
 
   if (request.kind === "rewriteHuman") {
+    if (request.chapterId) {
+      return {
+        chapterContent: asString(payload.chapterContent)
+      } satisfies GeneratedPayload;
+    }
     const manuscript = asStringArray(payload.manuscript);
     return {
       manuscript:
@@ -313,6 +397,12 @@ function normalizePayload(request: GenerationRequest, payload: Record<string, un
   }
 
   if (request.kind === "correction") {
+    if (request.chapterId) {
+      return {
+        chapterContent: asString(payload.chapterContent),
+        alerts: asStringArray(payload.alerts)
+      } satisfies GeneratedPayload;
+    }
     return {
       correctionNotes: asString(payload.correctionNotes),
       alerts: asStringArray(payload.alerts)
@@ -374,6 +464,11 @@ function buildFrontMatterFallback(project: BookProject): GeneratedPayload {
 
 function buildChapterFallback(project: BookProject, chapter?: Chapter, kind: GenerationKind = "chapter"): GeneratedPayload {
   const current = chapter || project.chapters[0];
+  if (project.translationSource && current?.sourceContent.trim()) {
+    return {
+      chapterContent: current.sourceContent
+    };
+  }
   const targetWords = current?.targetWords || 2200;
   const sectionCount = Math.max(6, Math.round(targetWords / 550));
   const sections = Array.from({ length: sectionCount }, (_, index) => {
@@ -445,12 +540,26 @@ function fallbackGeneration(request: GenerationRequest): GeneratedPayload {
   }
 
   if (request.kind === "rewriteHuman") {
+    if (chapter) {
+      return {
+        chapterContent: chapter.content
+      };
+    }
     return {
       manuscript: request.project.chapters.map((item) => item.content)
     };
   }
 
   if (request.kind === "correction") {
+    if (chapter) {
+      return {
+        chapterContent: chapter.content,
+        alerts: [
+          "Verifier les promesses trop absolues ou sensibles dans ce chapitre.",
+          "Relire le rythme, les transitions et la fluidite finale avant export."
+        ]
+      };
+    }
     return {
       correctionNotes:
         "Correction V1: alleger les repetitions, varier les ouvertures de paragraphes, renforcer les transitions et verifier les formulations trop absolues.",
@@ -521,6 +630,7 @@ function fallbackGeneration(request: GenerationRequest): GeneratedPayload {
 }
 
 function needsChapterExpansion(project: BookProject, chapterId: string | undefined, payload: GeneratedPayload) {
+  if (project.translationSource) return false;
   if (!chapterId || !payload.chapterContent) return false;
   const chapter = project.chapters.find((item) => item.id === chapterId);
   if (!chapter) return false;
@@ -533,6 +643,7 @@ function ensureChapterMinimumLength(
   payload: GeneratedPayload,
   kind: GenerationKind
 ) {
+  if (project.translationSource) return payload;
   if (!chapterId || !payload.chapterContent) return payload;
   const chapter = project.chapters.find((item) => item.id === chapterId);
   if (!chapter) return payload;
@@ -571,6 +682,15 @@ Retourne UNIQUEMENT un JSON:
 }
 
 export async function generateBookAsset(request: GenerationRequest): Promise<GeneratedPayload> {
+  if (request.kind === "chapterImages") {
+    const images = await generateChapterImages(request.project, request.chapterId);
+    if (!images || images.length === 0) {
+      return { chapterImages: [] };
+    }
+
+    return { chapterImages: images };
+  }
+
   const prompt = buildPrompt(request);
   const raw = await askModel(request.kind, prompt);
   const parsed = safeJsonParse(raw);

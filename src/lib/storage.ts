@@ -2,6 +2,7 @@ import {
   DEFAULT_PAPERBACK_LAYOUT,
   defaultCollectionTemplate,
   defaultFrontMatter,
+  defaultTranslationSource,
   initialCompliance
 } from "@/lib/constants";
 import type { BookProject, BookProjectInput, Chapter, ComplianceItem } from "@/lib/types";
@@ -48,7 +49,8 @@ export function createProject(input: BookProjectInput): BookProject {
     },
     paperback: { ...DEFAULT_PAPERBACK_LAYOUT },
     frontMatter: defaultFrontMatter(),
-    collectionTemplate: defaultCollectionTemplate()
+    collectionTemplate: defaultCollectionTemplate(),
+    translationSource: defaultTranslationSource()
   };
 }
 
@@ -90,6 +92,15 @@ function normalizeChapters(chapters: unknown, format: BookProjectInput["format"]
       learningGoal: typeof item?.learningGoal === "string" ? item.learningGoal : "",
       emotionalShift: typeof item?.emotionalShift === "string" ? item.emotionalShift : "",
       illustrationPrompt: typeof item?.illustrationPrompt === "string" ? item.illustrationPrompt : "",
+      sourceContent: typeof item?.sourceContent === "string" ? item.sourceContent : "",
+      selectedIllustrationPrompt:
+        typeof item?.selectedIllustrationPrompt === "string"
+          ? item.selectedIllustrationPrompt
+          : "",
+      selectedIllustrationDataUrl:
+        typeof item?.selectedIllustrationDataUrl === "string"
+          ? item.selectedIllustrationDataUrl
+          : "",
       targetWords:
         typeof item?.targetWords === "number" && Number.isFinite(item.targetWords)
           ? Math.max(item.targetWords, plan.targetWords)
@@ -193,7 +204,43 @@ export function normalizeProject(raw: unknown): BookProject {
                 ? input.collectionTemplate.sourceExcerpt
                 : ""
           }
-        : defaultCollectionTemplate()
+        : defaultCollectionTemplate(),
+    translationSource:
+      typeof input.translationSource === "object" && input.translationSource
+        ? {
+            sourceFileName:
+              typeof input.translationSource.sourceFileName === "string"
+                ? input.translationSource.sourceFileName
+                : "",
+            sourceTitle:
+              typeof input.translationSource.sourceTitle === "string"
+                ? input.translationSource.sourceTitle
+                : "",
+            sourceType:
+              input.translationSource.sourceType === "docx" ? "docx" : "pdf",
+            sourceLanguage:
+              typeof input.translationSource.sourceLanguage === "string"
+                ? input.translationSource.sourceLanguage
+                : "",
+            targetLanguage:
+              input.translationSource.targetLanguage === "anglais" ||
+              input.translationSource.targetLanguage === "espagnol" ||
+              input.translationSource.targetLanguage === "portugais du bresil" ||
+              input.translationSource.targetLanguage === "italien" ||
+              input.translationSource.targetLanguage === "allemand" ||
+              input.translationSource.targetLanguage === "hollandais"
+                ? input.translationSource.targetLanguage
+                : "anglais",
+            translationNotes:
+              typeof input.translationSource.translationNotes === "string"
+                ? input.translationSource.translationNotes
+                : "",
+            sourceExcerpt:
+              typeof input.translationSource.sourceExcerpt === "string"
+                ? input.translationSource.sourceExcerpt
+                : ""
+          }
+        : defaultTranslationSource()
   };
 
   project.progress = estimateProgress(project);

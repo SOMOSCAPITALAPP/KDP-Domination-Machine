@@ -1,5 +1,5 @@
 import { AI_MODEL_NAME } from "@/lib/constants";
-import type { BookFormat, BookProject, Chapter, TrimSize } from "@/lib/types";
+import type { BookFormat, BookProject, Chapter, TranslationLanguage, TrimSize } from "@/lib/types";
 
 export function cn(...inputs: Array<string | undefined | false | null>) {
   return inputs.filter(Boolean).join(" ");
@@ -48,7 +48,10 @@ export function createChapter(index: number, targetWords: number): Chapter {
     targetWords,
     wordCount: 0,
     content: "",
-    illustrationPrompt: ""
+    illustrationPrompt: "",
+    sourceContent: "",
+    selectedIllustrationPrompt: "",
+    selectedIllustrationDataUrl: ""
   };
 }
 
@@ -62,6 +65,33 @@ export function getTotalWordCount(project: BookProject) {
 
 export function getTotalWordGoal(project: BookProject) {
   return project.chapters.reduce((sum, chapter) => sum + chapter.targetWords, 0);
+}
+
+export function inferFormatFromWordCount(words: number): BookFormat {
+  if (words <= 22000) return "50 pages";
+  if (words <= 38000) return "100 pages";
+  if (words <= 60000) return "200 pages";
+  if (words <= 76000) return "250 pages";
+  return "300 pages";
+}
+
+export function getTranslationLanguageLabel(language: TranslationLanguage) {
+  switch (language) {
+    case "anglais":
+      return "anglais";
+    case "espagnol":
+      return "espagnol";
+    case "portugais du bresil":
+      return "portugais du Bresil";
+    case "italien":
+      return "italien";
+    case "allemand":
+      return "allemand";
+    case "hollandais":
+      return "hollandais";
+    default:
+      return language;
+  }
 }
 
 export function estimatePaperbackPageCount(project: BookProject) {

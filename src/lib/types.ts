@@ -10,6 +10,14 @@ export type BookStatus =
 
 export type BookFormat = "50 pages" | "100 pages" | "200 pages" | "250 pages" | "300 pages";
 export type BookTone = "expert" | "emotionnel" | "pedagogique" | "premium" | "populaire";
+export type ImportWorkflowMode = "collection" | "translation";
+export type TranslationLanguage =
+  | "anglais"
+  | "espagnol"
+  | "portugais du bresil"
+  | "italien"
+  | "allemand"
+  | "hollandais";
 export type BookType =
   | "guide pratique"
   | "developpement personnel"
@@ -41,6 +49,12 @@ export type Idea = {
   angle: string;
 };
 
+export type ChapterImageOption = {
+  id: string;
+  prompt: string;
+  imageDataUrl: string;
+};
+
 export type Chapter = {
   id: string;
   title: string;
@@ -51,6 +65,9 @@ export type Chapter = {
   wordCount: number;
   content: string;
   illustrationPrompt: string;
+  sourceContent: string;
+  selectedIllustrationPrompt: string;
+  selectedIllustrationDataUrl: string;
 };
 
 export type ComplianceItem = {
@@ -103,6 +120,16 @@ export type CollectionTemplate = {
   sourceExcerpt: string;
 };
 
+export type TranslationSource = {
+  sourceFileName: string;
+  sourceTitle: string;
+  sourceType: "pdf" | "docx";
+  sourceLanguage: string;
+  targetLanguage: TranslationLanguage;
+  translationNotes: string;
+  sourceExcerpt: string;
+};
+
 export type PdfPreviewMeta = {
   pageCount: number;
   trimSize: TrimSize;
@@ -139,6 +166,7 @@ export type BookProject = BookProjectInput & {
   paperback: PaperbackLayout;
   frontMatter: FrontMatterData;
   collectionTemplate: CollectionTemplate | null;
+  translationSource: TranslationSource | null;
 };
 
 export type GenerationKind =
@@ -146,6 +174,7 @@ export type GenerationKind =
   | "outline"
   | "frontMatter"
   | "chapter"
+  | "chapterImages"
   | "rewriteHuman"
   | "develop"
   | "simplify"
@@ -175,6 +204,7 @@ export type GeneratedPayload = Partial<{
   tableOfContents: string;
   chapters: Chapter[];
   chapterContent: string;
+  chapterImages: ChapterImageOption[];
   manuscript: string[];
   correctionNotes: string;
   alerts: string[];

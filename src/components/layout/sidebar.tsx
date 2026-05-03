@@ -6,7 +6,14 @@ import { NewBookDialog } from "@/components/projects/new-book-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PROJECT_STATUSES } from "@/lib/constants";
-import type { BookProject, BookProjectInput, BookStatus } from "@/lib/types";
+import type {
+  BookFormat,
+  BookProject,
+  BookProjectInput,
+  BookStatus,
+  ImportWorkflowMode,
+  TranslationLanguage
+} from "@/lib/types";
 
 type SidebarProps = {
   projects: BookProject[];
@@ -16,8 +23,10 @@ type SidebarProps = {
   onImport: (file: File) => Promise<void>;
   onImportTemplate: (payload: {
     file: File;
-    collectionName: string;
-    targetVolumeTopic: string;
+    mode: ImportWorkflowMode;
+    targetVolumeTopic?: string;
+    format?: BookFormat;
+    targetLanguage?: TranslationLanguage;
   }) => Promise<void>;
   onStatusChange: (projectId: string, status: BookStatus) => void;
 };

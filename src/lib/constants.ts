@@ -4,6 +4,7 @@ import type {
   BookTone,
   BookType,
   ComplianceItem,
+  TranslationLanguage,
   DepthLevel,
   FrontMatterData,
   PaperbackLayout,
@@ -34,6 +35,14 @@ export const BOOK_TYPES: BookType[] = [
 export const TONES: BookTone[] = ["expert", "emotionnel", "pedagogique", "premium", "populaire"];
 export const DEPTH_LEVELS: DepthLevel[] = ["leger", "standard", "profond"];
 export const TRIM_SIZES: TrimSize[] = ["5 x 8 in", "6 x 9 in", "8.5 x 11 in"];
+export const TRANSLATION_LANGUAGES: TranslationLanguage[] = [
+  "anglais",
+  "espagnol",
+  "portugais du bresil",
+  "italien",
+  "allemand",
+  "hollandais"
+];
 
 export const DEFAULT_PAPERBACK_LAYOUT: PaperbackLayout = {
   trimSize: "6 x 9 in",
@@ -56,6 +65,10 @@ export function defaultFrontMatter(): FrontMatterData {
 }
 
 export function defaultCollectionTemplate() {
+  return null;
+}
+
+export function defaultTranslationSource() {
   return null;
 }
 
