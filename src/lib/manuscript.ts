@@ -28,8 +28,18 @@ function isBoilerplate(text: string) {
 function cleanHeading(text: string) {
   return text
     .replace(/^#{1,6}\s*/, "")
+    .replace(/^chapitre\s+\d+\s*[:.-]?\s*/i, "")
     .replace(/^\d+(\.\d+)*\.?\s*/, "")
     .trim();
+}
+
+function normalizeComparableTitle(text: string) {
+  return cleanHeading(text)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+    .toLowerCase();
 }
 
 function splitInlineBulletParagraph(text: string) {
@@ -50,11 +60,13 @@ export function extractChapterBlocks(chapter: Chapter): ManuscriptBlock[] {
     .filter(Boolean);
 
   const blocks: ManuscriptBlock[] = [];
+  const chapterTitleComparable = normalizeComparableTitle(chapter.title);
 
   for (const paragraph of rawParagraphs) {
     const trimmed = paragraph.trim();
     if (!trimmed) continue;
     if (trimmed === chapter.title.trim()) continue;
+    if (normalizeComparableTitle(trimmed) === chapterTitleComparable) continue;
     if (isBoilerplate(trimmed)) continue;
     if (/^#{2,3}\s*section\s+\d+/i.test(trimmed)) continue;
 

@@ -55,8 +55,9 @@ function drawJustifiedLine(
   justify: boolean
 ) {
   const safeLine = sanitizeForPdfText(line, font);
+  const parts = safeLine.split(/\s+/).filter(Boolean);
 
-  if (!justify || !safeLine.includes(" ")) {
+  if (!justify || parts.length < 6 || !safeLine.includes(" ")) {
     page.drawText(safeLine, {
       x,
       y,
@@ -66,8 +67,6 @@ function drawJustifiedLine(
     });
     return;
   }
-
-  const parts = safeLine.split(" ");
   const wordWidth = parts.reduce((sum, part) => sum + font.widthOfTextAtSize(part, size), 0);
   const spaceCount = parts.length - 1;
 
@@ -77,7 +76,19 @@ function drawJustifiedLine(
   }
 
   const extraSpace = Math.max(0, maxWidth - wordWidth);
+  const baseSpaceWidth = font.widthOfTextAtSize(" ", size);
   const wordSpacing = extraSpace / spaceCount;
+
+  if (wordSpacing > baseSpaceWidth * 2.4) {
+    page.drawText(safeLine, {
+      x,
+      y,
+      font,
+      size,
+      color: BLACK
+    });
+    return;
+  }
 
   let cursorX = x;
   parts.forEach((part, index) => {
