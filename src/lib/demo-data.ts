@@ -19,6 +19,19 @@ export const demoProject = {
   differentiator: "Leadership interieur applique a la realite d'un solo founder.",
   competitionRisks: "Le sujet peut sembler trop large si l'angle business n'est pas assez concret.",
   amazonPositioning: "Petit guide transformationnel premium, pratico-pratique et actionnable.",
+  frontMatter: {
+    authorName: "Auteur exemple",
+    publisherName: "KDP Studio Editions",
+    collectionName: "Collection Business Clarte",
+    isbn: "ISBN a renseigner",
+    editionNote: "Premiere edition",
+    copyrightNotice: `Copyright ${new Date().getFullYear()} - Tous droits reserves.`,
+    dedication: "A tous ceux qui veulent retrouver du calme sans renoncer a l'ambition.",
+    preface:
+      "Ce livre est ne d'un constat simple: beaucoup d'entrepreneurs veulent plus de clarte sans ajouter encore plus de bruit a leur quotidien.",
+    introduction:
+      "Dans les pages qui suivent, tu vas suivre une progression simple pour retrouver une direction mentale plus stable, plus concrete et plus durable."
+  },
   ideas: [
     {
       title: "Leadership calme pour entrepreneurs solo",

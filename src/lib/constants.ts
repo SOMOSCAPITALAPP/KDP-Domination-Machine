@@ -5,6 +5,7 @@ import type {
   BookType,
   ComplianceItem,
   DepthLevel,
+  FrontMatterData,
   PaperbackLayout,
   TrimSize
 } from "@/lib/types";
@@ -39,6 +40,20 @@ export const DEFAULT_PAPERBACK_LAYOUT: PaperbackLayout = {
   bleed: false,
   pageNumbers: true
 };
+
+export function defaultFrontMatter(): FrontMatterData {
+  return {
+    authorName: "",
+    publisherName: "",
+    collectionName: "",
+    isbn: "",
+    editionNote: "Premiere edition",
+    copyrightNotice: "",
+    dedication: "",
+    preface: "",
+    introduction: ""
+  };
+}
 
 export const PROJECT_STATUSES: BookStatus[] = [
   "Idee",
@@ -79,7 +94,7 @@ export function initialCompliance(): ComplianceItem[] {
     {
       id: "ai-disclosure",
       label: "Contenu IA declare si necessaire",
-      note: "KDP demande de declarer le contenu AI-generated, pas le contenu AI-assisted.",
+      note: "KDP demande de declarer le contenu AI-generated. AI-assisted n'est pas a declarer.",
       checked: false
     },
     {

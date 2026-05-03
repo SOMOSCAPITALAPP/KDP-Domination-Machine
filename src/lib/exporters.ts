@@ -1,4 +1,3 @@
-import { AI_MODEL_NAME } from "@/lib/constants";
 import type { BookProject } from "@/lib/types";
 import { formatChapterMarkdown, getPdfPreviewMeta, getTotalWordCount, slugify } from "@/lib/utils";
 
@@ -13,11 +12,14 @@ export function exportProjectBundle(project: BookProject) {
     "## Sous-titre",
     project.packaging.seoSubtitle || project.promise,
     "",
-    "## Promesse",
-    project.promise,
+    "## Auteur",
+    project.frontMatter.authorName,
     "",
-    "## Risques de concurrence",
-    project.competitionRisks,
+    "## Preface",
+    project.frontMatter.preface,
+    "",
+    "## Introduction",
+    project.frontMatter.introduction,
     "",
     "## Table des matieres",
     project.tableOfContents,
@@ -37,8 +39,9 @@ export function exportProjectBundle(project: BookProject) {
 
   const text = [
     project.title,
-    project.promise,
-    project.competitionRisks,
+    project.frontMatter.authorName,
+    project.frontMatter.preface,
+    project.frontMatter.introduction,
     project.tableOfContents,
     ...project.chapters.map((chapter) => chapter.content)
   ].join("\n\n");
@@ -71,6 +74,16 @@ export function exportProjectBundle(project: BookProject) {
     project.packaging.coverHook
   ].join("\n");
 
+  const chapterIllustrations = [
+    "# Illustrations par chapitre",
+    "",
+    ...project.chapters.flatMap((chapter) => [
+      `## ${chapter.title}`,
+      chapter.illustrationPrompt || "Illustration a definir",
+      ""
+    ])
+  ].join("\n");
+
   const checklist = [
     "# Checklist KDP",
     "",
@@ -82,7 +95,6 @@ export function exportProjectBundle(project: BookProject) {
   const uploadNotes = [
     "# KDP upload notes",
     "",
-    `Modele IA verrouille: ${AI_MODEL_NAME}`,
     `Trim size interieur: ${pdfMeta.trimSize}`,
     `Bleed: ${pdfMeta.bleed ? "oui" : "non"}`,
     `Page numbers: ${project.paperback.pageNumbers ? "oui" : "non"}`,
@@ -91,6 +103,12 @@ export function exportProjectBundle(project: BookProject) {
     `Marge exterieure: ${pdfMeta.outsideMarginIn} in`,
     `Marge haute: ${pdfMeta.topMarginIn} in`,
     `Marge basse: ${pdfMeta.bottomMarginIn} in`,
+    "",
+    "Infos editoriales:",
+    `Auteur: ${project.frontMatter.authorName || "a renseigner"}`,
+    `Maison d'edition: ${project.frontMatter.publisherName || "a renseigner"}`,
+    `Collection: ${project.frontMatter.collectionName || "a renseigner"}`,
+    `ISBN: ${project.frontMatter.isbn || "a renseigner"}`,
     "",
     "Verification KDP:",
     "- Le paperback demande un fichier interieur PDF et un fichier couverture separe.",
@@ -102,6 +120,9 @@ export function exportProjectBundle(project: BookProject) {
     [
       "project_id",
       "title",
+      "author",
+      "publisher",
+      "isbn",
       "status",
       "language",
       "niche",
@@ -119,6 +140,9 @@ export function exportProjectBundle(project: BookProject) {
     [
       project.id,
       escapeCsv(project.title),
+      escapeCsv(project.frontMatter.authorName),
+      escapeCsv(project.frontMatter.publisherName),
+      escapeCsv(project.frontMatter.isbn),
       project.status,
       project.language,
       escapeCsv(project.niche),
@@ -141,7 +165,8 @@ export function exportProjectBundle(project: BookProject) {
       "word_count",
       "summary",
       "learning_goal",
-      "emotional_shift"
+      "emotional_shift",
+      "illustration_prompt"
     ],
     ...project.chapters.map((chapter) => [
       chapter.id,
@@ -150,7 +175,8 @@ export function exportProjectBundle(project: BookProject) {
       String(chapter.wordCount),
       escapeCsv(chapter.summary),
       escapeCsv(chapter.learningGoal),
-      escapeCsv(chapter.emotionalShift)
+      escapeCsv(chapter.emotionalShift),
+      escapeCsv(chapter.illustrationPrompt)
     ])
   ]
     .map((row) => row.join(","))
@@ -164,14 +190,14 @@ export function exportProjectBundle(project: BookProject) {
     text,
     csv: csvRows,
     packaging,
+    chapterIllustrations,
     coverBrief,
     checklist,
     uploadNotes,
     readme: [
       "KDP Domination Machine bundle",
       `Projet: ${project.title}`,
-      `Modele IA: ${AI_MODEL_NAME}`,
-      "Fichiers inclus: manuscript.md, manuscript.html, manuscript.txt, manuscript.docx, manuscript-kdp.pdf, project.json, project-sheet.csv, packaging.md, cover-brief.md, checklist-kdp.md, kdp-upload-notes.md, README.txt"
+      "Fichiers inclus: manuscript.md, manuscript.html, manuscript.txt, manuscript.docx, manuscript-kdp.pdf, project.json, project-sheet.csv, packaging.md, chapter-illustrations.md, cover-brief.md, checklist-kdp.md, kdp-upload-notes.md, README.txt"
     ].join("\n")
   };
 }

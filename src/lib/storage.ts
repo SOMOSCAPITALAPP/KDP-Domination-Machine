@@ -1,4 +1,4 @@
-import { DEFAULT_PAPERBACK_LAYOUT, initialCompliance } from "@/lib/constants";
+import { DEFAULT_PAPERBACK_LAYOUT, defaultFrontMatter, initialCompliance } from "@/lib/constants";
 import type { BookProject, BookProjectInput, Chapter, ComplianceItem } from "@/lib/types";
 import { createChapter, estimateProgress, getFormatPlan, uid } from "@/lib/utils";
 
@@ -41,7 +41,8 @@ export function createProject(input: BookProjectInput): BookProject {
       coverHook: "",
       coverBrief: ""
     },
-    paperback: { ...DEFAULT_PAPERBACK_LAYOUT }
+    paperback: { ...DEFAULT_PAPERBACK_LAYOUT },
+    frontMatter: defaultFrontMatter()
   };
 }
 
@@ -82,9 +83,10 @@ function normalizeChapters(chapters: unknown, format: BookProjectInput["format"]
       summary: typeof item?.summary === "string" ? item.summary : "",
       learningGoal: typeof item?.learningGoal === "string" ? item.learningGoal : "",
       emotionalShift: typeof item?.emotionalShift === "string" ? item.emotionalShift : "",
+      illustrationPrompt: typeof item?.illustrationPrompt === "string" ? item.illustrationPrompt : "",
       targetWords:
         typeof item?.targetWords === "number" && Number.isFinite(item.targetWords)
-          ? item.targetWords
+          ? Math.max(item.targetWords, plan.targetWords)
           : plan.targetWords,
       content,
       wordCount:
@@ -137,6 +139,10 @@ export function normalizeProject(raw: unknown): BookProject {
     paperback: {
       ...DEFAULT_PAPERBACK_LAYOUT,
       ...(typeof input.paperback === "object" && input.paperback ? input.paperback : {})
+    },
+    frontMatter: {
+      ...defaultFrontMatter(),
+      ...(typeof input.frontMatter === "object" && input.frontMatter ? input.frontMatter : {})
     }
   };
 

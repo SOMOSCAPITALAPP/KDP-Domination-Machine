@@ -50,6 +50,7 @@ export type Chapter = {
   targetWords: number;
   wordCount: number;
   content: string;
+  illustrationPrompt: string;
 };
 
 export type ComplianceItem = {
@@ -75,6 +76,18 @@ export type PaperbackLayout = {
   trimSize: TrimSize;
   bleed: boolean;
   pageNumbers: boolean;
+};
+
+export type FrontMatterData = {
+  authorName: string;
+  publisherName: string;
+  collectionName: string;
+  isbn: string;
+  editionNote: string;
+  copyrightNotice: string;
+  dedication: string;
+  preface: string;
+  introduction: string;
 };
 
 export type PdfPreviewMeta = {
@@ -111,11 +124,13 @@ export type BookProject = BookProjectInput & {
   compliance: ComplianceItem[];
   packaging: PackagingData;
   paperback: PaperbackLayout;
+  frontMatter: FrontMatterData;
 };
 
 export type GenerationKind =
   | "concept"
   | "outline"
+  | "frontMatter"
   | "chapter"
   | "rewriteHuman"
   | "develop"
@@ -151,6 +166,7 @@ export type GeneratedPayload = Partial<{
   alerts: string[];
   compliance: ComplianceItem[];
   packaging: Partial<PackagingData>;
+  frontMatter: Partial<FrontMatterData>;
 }>;
 
 export type BookProjectSectionKey =

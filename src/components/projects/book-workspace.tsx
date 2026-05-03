@@ -191,12 +191,26 @@ export function BookWorkspace({
       <Tabs items={TAB_ITEMS} value={tab} onChange={(value) => setTab(value as BookProjectSectionKey)} />
 
       {tab === "overview" ? (
-        <SectionCard title="Fiche projet">
+        <SectionCard
+          title="Fiche projet et debut de livre"
+          actions={
+            <Button onClick={() => void generate("frontMatter")} disabled={busy === "frontMatter"}>
+              <Sparkles className="mr-2 h-4 w-4" />
+              {busy === "frontMatter" ? "Generation..." : "Generer preface et introduction"}
+            </Button>
+          }
+        >
           <div className="grid gap-4 lg:grid-cols-2">
             <Field label="Titre de travail" value={project.title} onChange={(value) => patch({ title: value })} />
             <Field label="Niche" value={project.niche} onChange={(value) => patch({ niche: value })} />
             <Field label="Public cible" value={project.audience} onChange={(value) => patch({ audience: value })} />
             <Field label="Objectif commercial" value={project.businessGoal} onChange={(value) => patch({ businessGoal: value })} />
+            <Field label="Nom auteur" value={project.frontMatter.authorName} onChange={(value) => patch({ frontMatter: { ...project.frontMatter, authorName: value } })} />
+            <Field label="Maison d'edition" value={project.frontMatter.publisherName} onChange={(value) => patch({ frontMatter: { ...project.frontMatter, publisherName: value } })} />
+            <Field label="Collection" value={project.frontMatter.collectionName} onChange={(value) => patch({ frontMatter: { ...project.frontMatter, collectionName: value } })} />
+            <Field label="ISBN" value={project.frontMatter.isbn} onChange={(value) => patch({ frontMatter: { ...project.frontMatter, isbn: value } })} />
+            <Field label="Mention d'edition" value={project.frontMatter.editionNote} onChange={(value) => patch({ frontMatter: { ...project.frontMatter, editionNote: value } })} />
+            <Field label="Copyright" value={project.frontMatter.copyrightNotice} onChange={(value) => patch({ frontMatter: { ...project.frontMatter, copyrightNotice: value } })} />
           </div>
           <div className="mt-5 grid gap-4 lg:grid-cols-4">
             <InfoCard label="Ton" value={project.tone} />
@@ -208,6 +222,11 @@ export function BookWorkspace({
             <InfoCard label="Objectif mots" value={String(goalWords)} />
             <InfoCard label="Mots ecrits" value={String(actualWords)} />
             <InfoCard label="Trim size PDF" value={project.paperback.trimSize} />
+          </div>
+          <div className="mt-5 grid gap-4">
+            <TextareaBlock label="Dedicace" value={project.frontMatter.dedication} onChange={(value) => patch({ frontMatter: { ...project.frontMatter, dedication: value } })} />
+            <TextareaBlock label="Preface" value={project.frontMatter.preface} onChange={(value) => patch({ frontMatter: { ...project.frontMatter, preface: value } })} />
+            <TextareaBlock label="Introduction" value={project.frontMatter.introduction} onChange={(value) => patch({ frontMatter: { ...project.frontMatter, introduction: value } })} />
           </div>
           <div className="mt-5">
             <p className="text-sm font-medium text-ink">Progression globale</p>
@@ -285,6 +304,22 @@ export function BookWorkspace({
                   Progression emotionnelle
                 </p>
                 <p className="text-sm text-slate-600">{chapter.emotionalShift}</p>
+                <p className="mt-2 text-xs uppercase tracking-[0.2em] text-slate-500">
+                  Illustration simple du chapitre
+                </p>
+                <Textarea
+                  rows={3}
+                  value={chapter.illustrationPrompt}
+                  onChange={(event) =>
+                    patch({
+                      chapters: project.chapters.map((item) =>
+                        item.id === chapter.id
+                          ? { ...item, illustrationPrompt: event.target.value }
+                          : item
+                      )
+                    })
+                  }
+                />
               </div>
             ))}
           </div>
@@ -548,7 +583,7 @@ export function BookWorkspace({
                   <InfoCard label="Marge basse" value={`${suggestedPdfMeta.bottomMarginIn} in`} />
                 </div>
                 <p className="mt-4 text-sm text-slate-600">
-                  PDF interieur genere pour KDP. Le paperback demande toujours un fichier couverture separe en plus du PDF interieur.
+                  Le PDF interieur genere ne contient que le manuscrit, la preface, l'introduction et les informations editoriales. Les notes IA restent hors du PDF.
                 </p>
               </div>
 
@@ -694,6 +729,19 @@ function ChapterEditor({
       <div className="mt-4">
         <Progress value={chapterProgress} />
       </div>
+      <label className="mt-4 block space-y-2">
+        <span className="text-sm font-medium text-ink">Illustration simple du chapitre</span>
+        <Textarea
+          rows={3}
+          value={chapter.illustrationPrompt}
+          onChange={(event) =>
+            onChange({
+              ...chapter,
+              illustrationPrompt: event.target.value
+            })
+          }
+        />
+      </label>
       <Textarea
         className="mt-4"
         rows={18}
@@ -732,6 +780,12 @@ function applyGeneratedPayload(
   if (data.correctionNotes) next.correctionNotes = data.correctionNotes;
   if (data.alerts) next.alerts = data.alerts;
   if (data.compliance) next.compliance = data.compliance.length ? data.compliance : initialCompliance();
+  if (data.frontMatter) {
+    next.frontMatter = {
+      ...next.frontMatter,
+      ...data.frontMatter
+    };
+  }
 
   if (data.packaging) {
     next.packaging = {

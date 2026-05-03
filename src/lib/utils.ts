@@ -20,18 +20,18 @@ export function uid(prefix = "id") {
 
 export function getFormatPlan(format: BookFormat) {
   if (format === "50 pages") {
-    return { chapterCount: 10, targetWords: 1400, totalWordsGoal: 14000 };
+    return { chapterCount: 10, targetWords: 1800, totalWordsGoal: 18000 };
   }
   if (format === "100 pages") {
-    return { chapterCount: 12, targetWords: 2000, totalWordsGoal: 24000 };
+    return { chapterCount: 12, targetWords: 2600, totalWordsGoal: 31200 };
   }
   if (format === "200 pages") {
-    return { chapterCount: 14, targetWords: 3200, totalWordsGoal: 44800 };
+    return { chapterCount: 14, targetWords: 3800, totalWordsGoal: 53200 };
   }
   if (format === "250 pages") {
-    return { chapterCount: 16, targetWords: 3600, totalWordsGoal: 57600 };
+    return { chapterCount: 16, targetWords: 4300, totalWordsGoal: 68800 };
   }
-  return { chapterCount: 18, targetWords: 4000, totalWordsGoal: 72000 };
+  return { chapterCount: 18, targetWords: 4800, totalWordsGoal: 86400 };
 }
 
 export function defaultTrimSize(): TrimSize {
@@ -47,7 +47,8 @@ export function createChapter(index: number, targetWords: number): Chapter {
     emotionalShift: "",
     targetWords,
     wordCount: 0,
-    content: ""
+    content: "",
+    illustrationPrompt: ""
   };
 }
 
@@ -66,7 +67,7 @@ export function getTotalWordGoal(project: BookProject) {
 export function estimatePaperbackPageCount(project: BookProject) {
   const actualWords = getTotalWordCount(project);
   const estimatedWords = actualWords > 0 ? actualWords : getTotalWordGoal(project);
-  return Math.max(24, Math.ceil(estimatedWords / 230) + 4);
+  return Math.max(24, Math.ceil(estimatedWords / 230) + 6);
 }
 
 export function getKdpMarginPreset(pageCount: number, bleed: boolean) {
@@ -107,20 +108,22 @@ export function getTrimSizeDimensions(trimSize: TrimSize, bleed: boolean) {
 
 export function estimateProgress(project: BookProject) {
   let done = 0;
-  const total = 8;
+  const total = 10;
   if (project.promise) done += 1;
   if (project.tableOfContents) done += 1;
+  if (project.frontMatter.authorName) done += 1;
+  if (project.frontMatter.introduction) done += 1;
   if (project.chapters.some((chapter) => chapter.content.trim().length > 0)) done += 1;
-  if (project.chapters.every((chapter) => chapter.wordCount >= Math.round(chapter.targetWords * 0.7))) done += 1;
+  if (project.chapters.every((chapter) => chapter.wordCount >= Math.round(chapter.targetWords * 0.75))) done += 1;
+  if (project.chapters.every((chapter) => chapter.illustrationPrompt.trim().length > 0)) done += 1;
   if (project.correctionNotes) done += 1;
   if (project.packaging.amazonDescription) done += 1;
   if (project.compliance.some((item) => item.checked)) done += 1;
-  if (project.packaging.coverBrief || project.packaging.keywords.length > 0) done += 1;
   return Math.round((done / total) * 100);
 }
 
 export function formatChapterMarkdown(chapter: Chapter) {
-  return `## ${chapter.title}\n\n${chapter.summary}\n\n${chapter.content}`.trim();
+  return `## ${chapter.title}\n\n${chapter.summary}\n\nIllustration suggeree: ${chapter.illustrationPrompt}\n\n${chapter.content}`.trim();
 }
 
 export function getPdfPreviewMeta(project: BookProject) {

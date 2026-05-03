@@ -1,10 +1,11 @@
 import OpenAI from "openai";
-import { AI_MODEL_NAME, initialCompliance } from "@/lib/constants";
+import { AI_MODEL_NAME, defaultFrontMatter, initialCompliance } from "@/lib/constants";
 import { chapterPrompt } from "@/lib/prompts/chapter";
 import { complianceChecklistPrompt } from "@/lib/prompts/compliance-checklist";
 import { conceptPrompt } from "@/lib/prompts/concept";
 import { correctionPrompt } from "@/lib/prompts/correction";
 import { coverBriefPrompt } from "@/lib/prompts/cover-brief";
+import { frontMatterPrompt } from "@/lib/prompts/front-matter";
 import { keywordPrompt } from "@/lib/prompts/keywords";
 import { kdpDescriptionPrompt } from "@/lib/prompts/kdp-description";
 import { outlinePrompt } from "@/lib/prompts/outline";
@@ -13,6 +14,7 @@ import type {
   BookProject,
   Chapter,
   ComplianceItem,
+  FrontMatterData,
   GeneratedPayload,
   GenerationKind,
   GenerationRequest
@@ -37,27 +39,28 @@ function buildPrompt(request: GenerationRequest) {
 
   if (request.kind === "concept") return conceptPrompt(request.project);
   if (request.kind === "outline") return outlinePrompt(request.project);
+  if (request.kind === "frontMatter") return frontMatterPrompt(request.project);
   if (request.kind === "chapter" && chapter) return chapterPrompt(request.project, chapter);
   if (request.kind === "rewriteHuman") return rewriteHumanPrompt(request.project);
   if (request.kind === "develop" && chapter) {
     return chapterPrompt(
       request.project,
       chapter,
-      "Developpe fortement le chapitre, ajoute de la profondeur, des transitions et des applications concretes."
+      "Developpe fortement le chapitre, ajoute de la profondeur, des transitions, des applications concretes et des paragraphes plus riches."
     );
   }
   if (request.kind === "simplify" && chapter) {
     return chapterPrompt(
       request.project,
       chapter,
-      "Garde le fond mais simplifie le style, clarifie les idees et rends la lecture plus fluide."
+      "Garde le fond mais simplifie le style, clarifie les idees et rends la lecture plus fluide, tout en gardant un volume important."
     );
   }
   if (request.kind === "examples" && chapter) {
     return chapterPrompt(
       request.project,
       chapter,
-      "Ajoute beaucoup plus d'exemples, de cas concrets, de situations et d'applications immediates."
+      "Ajoute beaucoup plus d'exemples, de cas concrets, de situations vecues et d'applications immediates."
     );
   }
   if (request.kind === "correction") return correctionPrompt(request.project);
@@ -68,9 +71,10 @@ function buildPrompt(request: GenerationRequest) {
 }
 
 function getMaxCompletionTokens(kind: GenerationKind) {
-  if (kind === "chapter" || kind === "develop" || kind === "examples") return 14000;
-  if (kind === "simplify" || kind === "rewriteHuman") return 12000;
-  if (kind === "outline") return 7000;
+  if (kind === "chapter" || kind === "develop" || kind === "examples") return 16000;
+  if (kind === "simplify" || kind === "rewriteHuman") return 14000;
+  if (kind === "outline") return 8000;
+  if (kind === "frontMatter") return 4500;
   if (kind === "concept" || kind === "packaging") return 5000;
   return 3000;
 }
@@ -81,14 +85,19 @@ async function askModel(kind: GenerationKind, prompt: string) {
 
   const response = await sdk.chat.completions.create({
     model: AI_MODEL_NAME,
-    temperature: kind === "chapter" || kind === "develop" || kind === "examples" ? 0.8 : 0.55,
+    temperature:
+      kind === "chapter" || kind === "develop" || kind === "examples"
+        ? 0.82
+        : kind === "frontMatter"
+          ? 0.65
+          : 0.55,
     max_completion_tokens: getMaxCompletionTokens(kind),
     response_format: { type: "json_object" },
     messages: [
       {
         role: "system",
         content:
-          "Tu es un ghostwriter KDP senior. Retourne toujours un JSON valide, complet et directement exploitable."
+          "Tu es un ghostwriter KDP senior. Retourne toujours un JSON valide, complet, exploitable et sans commentaires meta."
       },
       { role: "user", content: prompt }
     ]
@@ -178,7 +187,13 @@ function normalizeOutline(project: BookProject, payload: Record<string, unknown>
       emotionalShift:
         asString(current.emotionalShift) ||
         "Passer de la confusion a une vision plus claire et plus confiante.",
-      targetWords: asNumber(current.targetWords, project.chapters[index]?.targetWords || plan.targetWords),
+      illustrationPrompt:
+        asString(current.illustrationPrompt) ||
+        `Photo simple, forte et lisible pour illustrer ${title.toLowerCase()}.`,
+      targetWords: Math.max(
+        plan.targetWords,
+        asNumber(current.targetWords, project.chapters[index]?.targetWords || plan.targetWords)
+      ),
       wordCount: project.chapters[index]?.wordCount || 0,
       content: project.chapters[index]?.content || ""
     });
@@ -212,11 +227,37 @@ function normalizeCompliance(value: unknown) {
   });
 }
 
+function normalizeFrontMatter(value: unknown, project: BookProject) {
+  const base = defaultFrontMatter();
+  const current =
+    typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+
+  const suggestedAuthor = project.frontMatter.authorName || project.packaging.authorBio ? "Auteur a confirmer" : "";
+
+  return {
+    authorName: asString(current.authorName) || project.frontMatter.authorName || suggestedAuthor,
+    publisherName: asString(current.publisherName) || project.frontMatter.publisherName,
+    collectionName: asString(current.collectionName) || project.frontMatter.collectionName,
+    isbn: asString(current.isbn) || project.frontMatter.isbn || "ISBN a renseigner",
+    editionNote: asString(current.editionNote) || project.frontMatter.editionNote || base.editionNote,
+    copyrightNotice:
+      asString(current.copyrightNotice) ||
+      project.frontMatter.copyrightNotice ||
+      `Copyright ${new Date().getFullYear()} - Tous droits reserves.`,
+    dedication: asString(current.dedication) || project.frontMatter.dedication,
+    preface: asString(current.preface) || project.frontMatter.preface,
+    introduction: asString(current.introduction) || project.frontMatter.introduction
+  } satisfies FrontMatterData;
+}
+
 function normalizePayload(request: GenerationRequest, payload: Record<string, unknown>) {
   if (request.kind === "concept") {
     return {
       ideas: normalizeIdeas(payload.ideas, request.project.niche, request.project.audience),
-      commercialScore: Math.max(55, Math.min(99, asNumber(payload.commercialScore, request.project.commercialScore + 5))),
+      commercialScore: Math.max(
+        55,
+        Math.min(99, asNumber(payload.commercialScore, request.project.commercialScore + 5))
+      ),
       promise:
         asString(payload.promise) ||
         `Aider ${request.project.audience || "le lecteur"} a obtenir un resultat concret dans ${request.project.niche || "sa niche"}.`,
@@ -242,6 +283,12 @@ function normalizePayload(request: GenerationRequest, payload: Record<string, un
 
   if (request.kind === "outline") {
     return normalizeOutline(request.project, payload);
+  }
+
+  if (request.kind === "frontMatter") {
+    return {
+      frontMatter: normalizeFrontMatter(payload.frontMatter ?? payload, request.project)
+    } satisfies GeneratedPayload;
   }
 
   if (
@@ -303,31 +350,51 @@ function buildOutlineFallback(project: BookProject): GeneratedPayload {
   return normalizeOutline(project, {});
 }
 
+function buildFrontMatterFallback(project: BookProject): GeneratedPayload {
+  return {
+    frontMatter: {
+      authorName: project.frontMatter.authorName || "Auteur a renseigner",
+      publisherName: project.frontMatter.publisherName || "Maison d'edition a renseigner",
+      collectionName: project.frontMatter.collectionName || "Collection a renseigner",
+      isbn: project.frontMatter.isbn || "ISBN a renseigner",
+      editionNote: project.frontMatter.editionNote || "Premiere edition",
+      copyrightNotice:
+        project.frontMatter.copyrightNotice ||
+        `Copyright ${new Date().getFullYear()} - Tous droits reserves.`,
+      dedication: project.frontMatter.dedication || "",
+      preface:
+        project.frontMatter.preface ||
+        `Ce livre a ete concu pour guider ${project.audience || "le lecteur"} avec clarte, serieux et application immediate.`,
+      introduction:
+        project.frontMatter.introduction ||
+        `Dans ce livre, nous allons transformer ${project.promise || "une promesse centrale"} en progression concrete grace a un parcours clair, etape par etape.`
+    }
+  };
+}
+
 function buildChapterFallback(project: BookProject, chapter?: Chapter, kind: GenerationKind = "chapter"): GeneratedPayload {
   const current = chapter || project.chapters[0];
-  const targetWords = current?.targetWords || 1800;
-  const sectionCount = Math.max(5, Math.round(targetWords / 650));
+  const targetWords = current?.targetWords || 2200;
+  const sectionCount = Math.max(6, Math.round(targetWords / 550));
   const sections = Array.from({ length: sectionCount }, (_, index) => {
     const part = index + 1;
     return [
       `### Section ${part}`,
       `Ce passage developpe un angle concret du chapitre ${current?.title || "en cours"} et fait avancer le lecteur vers la promesse du livre.`,
-      "Explique le principe, montre pourquoi il compte maintenant, puis illustre-le avec une situation credible et une action precise.",
+      "Explique le principe, montre pourquoi il compte maintenant, puis illustre-le avec une situation credible, une nuance utile et une action precise.",
       kind === "examples"
-        ? "Ajoute ici un exemple plus detaille, un cas pratique et une mini mise en situation pour ancrer l'idee."
+        ? "Ajoute ici un exemple detaille, un cas pratique et une mini mise en situation pour ancrer l'idee en profondeur."
         : kind === "simplify"
-          ? "La formulation reste plus simple, plus directe et plus facile a appliquer rapidement."
+          ? "La formulation reste plus simple, plus directe et plus facile a appliquer, sans reduire la richesse du contenu."
           : kind === "develop"
-            ? "La version va plus loin dans le raisonnement, les nuances, les transitions et les applications terrain."
-            : "La version reste dense, pedagogique et orientee execution."
+            ? "La version va plus loin dans le raisonnement, les nuances, les transitions, les objections et les applications terrain."
+            : "La version reste dense, pedagogique, orientee execution et assez longue pour constituer un vrai chapitre."
     ].join("\n\n");
   }).join("\n\n");
 
   return {
     chapterContent: [
       current?.title || "Chapitre",
-      "",
-      `Objectif de ce chapitre: ${current?.learningGoal || "faire avancer le lecteur avec une etape claire."}`,
       "",
       sections,
       "",
@@ -355,13 +422,17 @@ function fallbackGeneration(request: GenerationRequest): GeneratedPayload {
       finalBenefit: "Un resultat visible, applicable et rassurant.",
       differentiator: `Approche ${request.project.tone} avec structure orientee action et lisibilite Amazon.`,
       competitionRisks:
-        "Le sujet peut rester trop concurrentiel si la promesse manque de specificity ou d'angle proprietaire.",
+        "Le sujet peut rester trop concurrentiel si la promesse manque de specificite ou d'angle proprietaire.",
       amazonPositioning: `Livre ${request.project.type} a promesse claire pour la niche ${request.project.niche}.`
     };
   }
 
   if (request.kind === "outline") {
     return buildOutlineFallback(request.project);
+  }
+
+  if (request.kind === "frontMatter") {
+    return buildFrontMatterFallback(request.project);
   }
 
   if (
@@ -375,10 +446,7 @@ function fallbackGeneration(request: GenerationRequest): GeneratedPayload {
 
   if (request.kind === "rewriteHuman") {
     return {
-      manuscript: request.project.chapters.map(
-        (item) =>
-          `${item.content}\n\nVoix retravaillee: phrases plus naturelles, transitions plus humaines et ton moins mecanique.`
-      )
+      manuscript: request.project.chapters.map((item) => item.content)
     };
   }
 
@@ -388,7 +456,7 @@ function fallbackGeneration(request: GenerationRequest): GeneratedPayload {
         "Correction V1: alleger les repetitions, varier les ouvertures de paragraphes, renforcer les transitions et verifier les formulations trop absolues.",
       alerts: [
         "Verifier toute promesse absolue liee a la sante, a la finance ou au droit.",
-        "Relire la coherence du niveau de ton entre introduction, chapitres et conclusion."
+        "Relire la coherence du niveau de ton entre preface, introduction, chapitres et conclusion."
       ]
     };
   }
@@ -456,7 +524,7 @@ function needsChapterExpansion(project: BookProject, chapterId: string | undefin
   if (!chapterId || !payload.chapterContent) return false;
   const chapter = project.chapters.find((item) => item.id === chapterId);
   if (!chapter) return false;
-  return countWords(payload.chapterContent) < Math.max(1500, Math.round(chapter.targetWords * 0.8));
+  return countWords(payload.chapterContent) < Math.max(2200, Math.round(chapter.targetWords * 0.95));
 }
 
 function ensureChapterMinimumLength(
@@ -470,7 +538,7 @@ function ensureChapterMinimumLength(
   if (!chapter) return payload;
 
   const currentWords = countWords(payload.chapterContent);
-  const minimumWords = Math.max(1500, Math.round(chapter.targetWords * 0.8));
+  const minimumWords = Math.max(2200, Math.round(chapter.targetWords * 0.95));
   if (currentWords >= minimumWords) return payload;
 
   const fallback = buildChapterFallback(project, chapter, kind).chapterContent || "";
@@ -488,12 +556,13 @@ Objectif:
 - Resume: ${chapter.summary}
 - Objectif pedagogique: ${chapter.learningGoal}
 - Cible ideale: ${chapter.targetWords} mots
-- Minimum indispensable: ${Math.max(1200, Math.round(chapter.targetWords * 0.85))} mots
+- Minimum indispensable: ${Math.max(2200, Math.round(chapter.targetWords * 0.95))} mots
 
 Draft actuel:
 ${draft}
 
 Reprends ce chapitre et livre une version beaucoup plus complete, plus longue, plus utile, avec sous-sections, exemples, transitions et conclusion locale.
+La sortie doit rester du manuscrit pur.
 
 Retourne UNIQUEMENT un JSON:
 {
@@ -552,6 +621,10 @@ export async function generateBookAsset(request: GenerationRequest): Promise<Gen
 
   if (request.kind === "outline" && (!normalized.chapters || normalized.chapters.length === 0)) {
     return buildOutlineFallback(request.project);
+  }
+
+  if (request.kind === "frontMatter" && !normalized.frontMatter) {
+    return buildFrontMatterFallback(request.project);
   }
 
   return normalized;

@@ -29,7 +29,7 @@ page.on("response", (response) => {
 
 const result = {
   story:
-    "Login admin -> create project -> concept -> outline -> chapter -> PDF preview -> PDF download -> ZIP export",
+    "Login admin -> front matter -> concept -> outline with illustration prompts -> chapter -> manuscript-only PDF -> ZIP export",
   checks: {}
 };
 
@@ -39,18 +39,32 @@ try {
   await page.getByRole("button", { name: /Entrer/i }).click();
   await page.waitForSelector("text=Nouveau livre", { timeout: 20000 });
   result.checks.login = { ok: true, url: page.url() };
-
   result.checks.modelLockVisible = (await page.getByText("gpt-4.1-mini", { exact: false }).count()) > 0;
 
   await page.getByRole("button", { name: "Nouveau livre" }).click();
-  await page.getByPlaceholder("Titre de travail").fill("KDP PDF QA");
+  await page.getByPlaceholder("Titre de travail").fill("KDP Editorial QA");
   await page.getByPlaceholder("Langue").fill("Francais");
   await page.getByPlaceholder("Niche").fill("Productivite");
   await page.getByPlaceholder("Public cible").fill("Entrepreneurs francophones");
-  await page.getByPlaceholder("Objectif commercial").fill("Valider le flux KDP complet");
+  await page.getByPlaceholder("Objectif commercial").fill("Verifier le flux editorial KDP");
   await page.getByRole("button", { name: /Creer/i }).click();
   await page.waitForTimeout(1000);
-  result.checks.projectCreated = (await page.locator("text=KDP PDF QA").count()) > 0;
+
+  const frontMatterPromise = page.waitForResponse(
+    (response) =>
+      response.url().includes("/api/generate") &&
+      response.request().postData()?.includes("\"frontMatter\"") &&
+      response.status() === 200,
+    { timeout: 45000 }
+  );
+  await page.getByRole("button", { name: /Generer preface et introduction/i }).click();
+  await frontMatterPromise;
+  await page.waitForTimeout(1500);
+  result.checks.frontMatter = {
+    authorLength: await page.locator('input').nth(4).evaluate((element) => element.value.length),
+    prefaceLength: await page.locator('textarea').nth(0).evaluate((element) => element.value.length),
+    introductionLength: await page.locator('textarea').nth(1).evaluate((element) => element.value.length)
+  };
 
   await page.getByRole("button", { name: "Concept Best-Seller", exact: true }).click();
   const conceptPromise = page.waitForResponse(
@@ -63,9 +77,6 @@ try {
   await page.getByRole("button", { name: /Generer le concept/i }).click();
   await conceptPromise;
   await page.waitForTimeout(1200);
-  result.checks.conceptLengths = await page.locator("textarea").evaluateAll((elements) =>
-    elements.map((element) => element.value.length).slice(0, 7)
-  );
 
   await page.getByRole("button", { name: "Plan du livre", exact: true }).click();
   const outlinePromise = page.waitForResponse(
@@ -78,9 +89,12 @@ try {
   await page.getByRole("button", { name: /Generer le plan/i }).click();
   await outlinePromise;
   await page.waitForTimeout(1500);
+  const outlineTextareas = await page.locator("textarea").evaluateAll((elements) =>
+    elements.map((element) => element.value.length)
+  );
   result.checks.outline = {
-    tocLength: await page.locator("textarea").first().evaluate((element) => element.value.length),
-    chapterCards: await page.locator("article, div").getByText(/Objectif pedagogique/i).count()
+    tocLength: outlineTextareas[0] || 0,
+    illustrationPromptLengths: outlineTextareas.slice(1, 4)
   };
 
   await page.getByRole("button", { name: "Redaction", exact: true }).click();
@@ -89,14 +103,15 @@ try {
       response.url().includes("/api/generate") &&
       response.request().postData()?.includes("\"chapter\"") &&
       response.status() === 200,
-    { timeout: 90000 }
+    { timeout: 120000 }
   );
   await page.getByRole("button", { name: /Generer chapitre/i }).first().click();
   await chapterPromise;
   await page.waitForTimeout(1800);
   result.checks.chapter = {
-    firstChapterLength: await page.locator("textarea").nth(0).evaluate((element) => element.value.length),
-    firstChapterWords: await page.locator("textarea").nth(0).evaluate((element) =>
+    firstIllustrationLength: await page.locator("textarea").nth(0).evaluate((element) => element.value.length),
+    firstChapterLength: await page.locator("textarea").nth(1).evaluate((element) => element.value.length),
+    firstChapterWords: await page.locator("textarea").nth(1).evaluate((element) =>
       element.value.split(/\s+/).filter(Boolean).length
     )
   };
@@ -112,8 +127,6 @@ try {
   await page.waitForTimeout(1200);
   result.checks.pdfPreview = {
     status: previewResponse.status(),
-    pageCountHeader: previewResponse.headers()["x-kdp-page-count"],
-    trimSizeHeader: previewResponse.headers()["x-kdp-trim-size"],
     iframeVisible: (await page.locator('iframe[title="Preview PDF KDP"]').count()) > 0
   };
 
@@ -127,11 +140,16 @@ try {
   const pdfTargetPath = path.join(process.cwd(), "test-artifacts", await pdfDownload.suggestedFilename());
   await fs.mkdir(path.dirname(pdfTargetPath), { recursive: true });
   await pdfDownload.saveAs(pdfTargetPath);
-  const pdfStats = await fs.stat(pdfTargetPath);
+  const pdfBuffer = await fs.readFile(pdfTargetPath);
+  const pdfText = pdfBuffer.toString("latin1");
   result.checks.pdfDownload = {
     status: pdfResponse.status(),
     filename: await pdfDownload.suggestedFilename(),
-    bytes: pdfStats.size
+    bytes: pdfBuffer.length,
+    containsModeleIA: pdfText.includes("Modele IA"),
+    containsResumeTag: pdfText.includes("Resume:"),
+    containsObjectifTag: pdfText.includes("Objectif:"),
+    containsCompteurTag: pdfText.includes("Compteur chapitre:")
   };
 
   const zipDownloadPromise = page.waitForEvent("download", { timeout: 45000 });
@@ -152,7 +170,8 @@ try {
     hasPdf: files.some((item) => item.endsWith("manuscript-kdp.pdf")),
     hasDocx: files.some((item) => item.endsWith("manuscript.docx")),
     hasCsv: files.some((item) => item.endsWith("project-sheet.csv")),
-    hasUploadNotes: files.some((item) => item.endsWith("kdp-upload-notes.md"))
+    hasUploadNotes: files.some((item) => item.endsWith("kdp-upload-notes.md")),
+    hasIllustrations: files.some((item) => item.endsWith("chapter-illustrations.md"))
   };
 
   result.ok = true;

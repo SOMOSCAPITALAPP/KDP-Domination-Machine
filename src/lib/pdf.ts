@@ -1,12 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import { AI_MODEL_NAME } from "@/lib/constants";
 import type { BookProject } from "@/lib/types";
-import {
-  countWords,
-  getKdpMarginPreset,
-  getPdfPreviewMeta,
-  getTrimSizeDimensions
-} from "@/lib/utils";
+import { getKdpMarginPreset, getPdfPreviewMeta, getTrimSizeDimensions } from "@/lib/utils";
 
 const POINTS_PER_INCH = 72;
 
@@ -21,7 +15,12 @@ function splitParagraphs(text: string) {
     .filter(Boolean);
 }
 
-function wrapText(text: string, maxWidth: number, fontSize: number, measure: (value: string, size: number) => number) {
+function wrapText(
+  text: string,
+  maxWidth: number,
+  fontSize: number,
+  measure: (value: string, size: number) => number
+) {
   const words = text.split(/\s+/).filter(Boolean);
   const lines: string[] = [];
   let current = "";
@@ -64,8 +63,7 @@ export async function buildProjectPdf(project: BookProject) {
 
   function addPage() {
     pageNumber += 1;
-    const nextPage = pdfDoc.addPage([pageWidth, pageHeight]);
-    return nextPage;
+    return pdfDoc.addPage([pageWidth, pageHeight]);
   }
 
   function getPageMargins(currentPageNumber: number) {
@@ -78,11 +76,18 @@ export async function buildProjectPdf(project: BookProject) {
 
   function ensureSpace(heightNeeded: number) {
     if (cursorY - heightNeeded >= bottomMargin) return;
+    drawFooter();
     page = addPage();
     cursorY = pageHeight - topMargin;
   }
 
-  function writeLines(lines: string[], font: typeof bodyFont, size: number, lineHeight: number, color = rgb(0.12, 0.16, 0.22)) {
+  function writeLines(
+    lines: string[],
+    font: typeof bodyFont,
+    size: number,
+    lineHeight: number,
+    color = rgb(0.12, 0.16, 0.22)
+  ) {
     const { left, right } = getPageMargins(pageNumber);
     const maxWidth = pageWidth - left - right;
 
@@ -100,7 +105,13 @@ export async function buildProjectPdf(project: BookProject) {
     }
   }
 
-  function writeParagraph(text: string, font: typeof bodyFont, size: number, lineHeight: number, gapAfter = 8) {
+  function writeParagraph(
+    text: string,
+    font: typeof bodyFont,
+    size: number,
+    lineHeight: number,
+    gapAfter = 8
+  ) {
     const { left, right } = getPageMargins(pageNumber);
     const maxWidth = pageWidth - left - right;
     const lines = wrapText(text, maxWidth, size, (value, currentSize) =>
@@ -113,6 +124,17 @@ export async function buildProjectPdf(project: BookProject) {
   function writeHeading(text: string, size: number) {
     cursorY -= 6;
     writeParagraph(text, titleFont, size, size + 4, 10);
+  }
+
+  function writeCenteredText(text: string, font: typeof bodyFont, size: number, y: number) {
+    const width = font.widthOfTextAtSize(text, size);
+    page.drawText(text, {
+      x: (pageWidth - width) / 2,
+      y,
+      font,
+      size,
+      color: rgb(0.12, 0.16, 0.22)
+    });
   }
 
   function drawFooter() {
@@ -134,37 +156,64 @@ export async function buildProjectPdf(project: BookProject) {
     cursorY = pageHeight - topMargin;
   }
 
-  const centeredTitleSize = 22;
-  const centeredSubSize = 13;
-  const titleWidth = titleFont.widthOfTextAtSize(project.title, centeredTitleSize);
-  page.drawText(project.title, {
-    x: (pageWidth - titleWidth) / 2,
-    y: pageHeight - toPoints(2),
-    font: titleFont,
-    size: centeredTitleSize,
-    color: rgb(0.1, 0.13, 0.2)
-  });
-
-  const subtitle = project.packaging.seoSubtitle || project.promise || "Manuscrit interieur KDP";
-  const subtitleWidth = italicFont.widthOfTextAtSize(subtitle, centeredSubSize);
-  page.drawText(subtitle, {
-    x: (pageWidth - subtitleWidth) / 2,
-    y: pageHeight - toPoints(2.55),
-    font: italicFont,
-    size: centeredSubSize,
-    color: rgb(0.36, 0.38, 0.45)
-  });
-
-  page.drawText(`Modele IA: ${AI_MODEL_NAME}`, {
-    x: getPageMargins(pageNumber).left,
-    y: toPoints(0.9),
-    font: bodyFont,
-    size: 10,
-    color: rgb(0.42, 0.44, 0.5)
-  });
+  writeCenteredText(project.title, titleFont, 22, pageHeight - toPoints(2));
+  if (project.packaging.seoSubtitle || project.promise) {
+    writeCenteredText(
+      project.packaging.seoSubtitle || project.promise,
+      italicFont,
+      13,
+      pageHeight - toPoints(2.55)
+    );
+  }
+  if (project.frontMatter.authorName) {
+    writeCenteredText(project.frontMatter.authorName, bodyFont, 12, pageHeight - toPoints(3.15));
+  }
+  if (project.frontMatter.collectionName) {
+    writeCenteredText(project.frontMatter.collectionName, italicFont, 11, pageHeight - toPoints(3.55));
+  }
   drawFooter();
   nextPage();
 
+  writeHeading("Informations editoriales", 16);
+  if (project.frontMatter.publisherName) {
+    writeParagraph(`Maison d'edition: ${project.frontMatter.publisherName}`, bodyFont, 11, 16, 6);
+  }
+  if (project.frontMatter.collectionName) {
+    writeParagraph(`Collection: ${project.frontMatter.collectionName}`, bodyFont, 11, 16, 6);
+  }
+  if (project.frontMatter.isbn) {
+    writeParagraph(`ISBN: ${project.frontMatter.isbn}`, bodyFont, 11, 16, 6);
+  }
+  if (project.frontMatter.editionNote) {
+    writeParagraph(project.frontMatter.editionNote, bodyFont, 11, 16, 6);
+  }
+  if (project.frontMatter.copyrightNotice) {
+    writeParagraph(project.frontMatter.copyrightNotice, bodyFont, 11, 16, 6);
+  }
+
+  if (project.frontMatter.dedication) {
+    nextPage();
+    writeHeading("Dedicace", 16);
+    writeParagraph(project.frontMatter.dedication, italicFont, 12, 18, 12);
+  }
+
+  if (project.frontMatter.preface) {
+    nextPage();
+    writeHeading("Preface", 18);
+    for (const paragraph of splitParagraphs(project.frontMatter.preface)) {
+      writeParagraph(paragraph, bodyFont, 11, 17, 10);
+    }
+  }
+
+  if (project.frontMatter.introduction) {
+    nextPage();
+    writeHeading("Introduction", 18);
+    for (const paragraph of splitParagraphs(project.frontMatter.introduction)) {
+      writeParagraph(paragraph, bodyFont, 11, 17, 10);
+    }
+  }
+
+  nextPage();
   writeHeading("Table des matieres", 18);
   const tocLines = project.tableOfContents
     ? project.tableOfContents.split("\n").map((item) => item.trim()).filter(Boolean)
@@ -172,54 +221,30 @@ export async function buildProjectPdf(project: BookProject) {
   for (const line of tocLines) {
     writeParagraph(line, bodyFont, 12, 17, 4);
   }
-  nextPage();
 
   for (const chapter of project.chapters) {
+    nextPage();
     writeHeading(chapter.title, 18);
-    if (chapter.summary) {
-      writeParagraph(`Resume: ${chapter.summary}`, italicFont, 11, 16, 8);
-    }
-    if (chapter.learningGoal) {
-      writeParagraph(`Objectif: ${chapter.learningGoal}`, bodyFont, 11, 16, 8);
-    }
 
     const contentParagraphs = splitParagraphs(chapter.content);
     if (contentParagraphs.length === 0) {
-      writeParagraph(
-        `Chapitre a completer. Cible actuelle: ${chapter.targetWords} mots.`,
-        italicFont,
-        11,
-        16,
-        12
-      );
-    } else {
-      for (const paragraph of contentParagraphs) {
-        if (paragraph.startsWith("### ")) {
-          writeHeading(paragraph.replace(/^###\s*/, ""), 14);
-          continue;
-        }
-
-        const prefix = paragraph.startsWith("## ") ? paragraph.replace(/^##\s*/, "") : "";
-        if (prefix) {
-          writeHeading(prefix, 15);
-          continue;
-        }
-
-        writeParagraph(paragraph, bodyFont, 11, 17, 10);
-      }
+      writeParagraph("Chapitre a completer.", italicFont, 11, 16, 12);
+      continue;
     }
 
-    writeParagraph(
-      `Compteur chapitre: ${chapter.wordCount || countWords(chapter.content)} mots / objectif ${chapter.targetWords} mots.`,
-      italicFont,
-      10,
-      15,
-      18
-    );
+    for (const paragraph of contentParagraphs) {
+      if (paragraph.startsWith("### ")) {
+        writeHeading(paragraph.replace(/^###\s*/, ""), 14);
+        continue;
+      }
 
-    drawFooter();
-    if (chapter !== project.chapters[project.chapters.length - 1]) {
-      nextPage();
+      const prefix = paragraph.startsWith("## ") ? paragraph.replace(/^##\s*/, "") : "";
+      if (prefix) {
+        writeHeading(prefix, 15);
+        continue;
+      }
+
+      writeParagraph(paragraph, bodyFont, 11, 17, 10);
     }
   }
 

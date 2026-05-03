@@ -20,8 +20,9 @@ Contraintes:
 - Produis exactement ${plan.chapterCount} chapitres.
 - Chaque chapitre doit avoir un titre tres clair et specifique.
 - Chaque resume doit tenir en 2 a 4 phrases.
-- Chaque chapter.targetWords doit rester proche de ${plan.targetWords} mots.
+- Chaque chapter.targetWords doit etre au minimum ${plan.targetWords} mots.
 - La progression emotionnelle doit faire avancer le lecteur du probleme vers le resultat.
+- Donne aussi pour chaque chapitre une idee de photo simple mais forte a utiliser comme illustration.
 - Le plan doit etre adapte a un vrai livre, pas a un article.
 
 Retourne UNIQUEMENT un JSON valide de cette forme:
@@ -33,7 +34,8 @@ Retourne UNIQUEMENT un JSON valide de cette forme:
       "summary": "...",
       "learningGoal": "...",
       "emotionalShift": "...",
-      "targetWords": ${plan.targetWords}
+      "targetWords": ${plan.targetWords},
+      "illustrationPrompt": "Photo simple, importante et lisible pour illustrer ce chapitre"
     }
   ]
 }`;

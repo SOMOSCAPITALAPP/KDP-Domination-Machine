@@ -32,6 +32,7 @@ export async function POST(request: Request) {
     root.file("manuscript.html", asText(bundle.html));
     root.file("manuscript.txt", asText(bundle.text));
     root.file("project-sheet.csv", asText(bundle.csv));
+    root.file("chapter-illustrations.md", asText(bundle.chapterIllustrations));
     root.file("cover-brief.md", asText(bundle.coverBrief));
     root.file("packaging.md", asText(bundle.packaging));
     root.file("checklist-kdp.md", asText(bundle.checklist));
